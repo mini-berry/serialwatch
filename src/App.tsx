@@ -14,7 +14,7 @@ interface SerialDebuggerProps {
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div style={{ height: '100vh', backgroundColor: '#f8f9fa' }}>
-      <Splitter style={{ height: '100vh', overflow: 'hidden' }}>
+      <Splitter style={{ height: '100vh', overflow: 'hidden', paddingLeft:'10px'}}>
         <Splitter.Panel>
           {/* 串口设置 */}
           <div style={{ display: 'flex', alignItems: 'center', marginBottom: '10px' }}>
