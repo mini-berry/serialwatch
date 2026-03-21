@@ -1,18 +1,27 @@
 import React from 'react';
 import './App.css';
-import { Button, Select, Splitter, Checkbox, Divider } from 'antd';
-
+import { Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
+import { InputNumber } from 'antd';
+import { ColorPicker } from 'antd';
+import { Input } from 'antd';
+import type { InputNumberProps } from 'antd';
 // 自定义组件类型定义
 interface SerialDebuggerProps {
   // 可以添加props定义
 }
+const { TextArea } = Input;
+const formatter: InputNumberProps<number>['formatter'] = (value) => {
+  if (value === undefined || value === null) return '0.0';
+  const formattedValue = (value / 10).toFixed(1);
+  return `${formattedValue}`;
+};
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div className="serial-debugger">
       <Splitter className="serial-debugger__splitter">
-        <Splitter.Panel className="left-panel">
-          {/* 串口设置 */}
+        <Splitter.Panel className="left-panel" >
+
           <div className="serial-debugger__row" style={{ paddingTop: "10px" }}>
             <label className="serial-debugger__bold-label">端口名</label>
             <Select className="serial-debugger__select" />
@@ -84,16 +93,12 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           </div>
 
           <div className="serial-debugger__button-row">
-            <Checkbox style={{ marginLeft: '10px' }} />
-            <Button className="serial-debugger__toggle-button" size="small">
-              <p className="serial-debugger__button-text">RI</p>
-            </Button>
-            <Button className="serial-debugger__toggle-button" size="small">
-              <p className="serial-debugger__button-text">DSR</p>
-            </Button>
-            <Button className="serial-debugger__toggle-button" style={{ marginRight: '5px' }} size="small">
-              <p className="serial-debugger__button-text">CTS</p>
-            </Button>
+            <Radio.Group style={{ marginLeft: '10px' }} size="small" buttonStyle="solid">
+              <Radio.Button value="RI">RI</Radio.Button>
+              <Radio.Button value="RI">DSR</Radio.Button>
+              <Radio.Button value="RI">CTS</Radio.Button>
+            </Radio.Group>
+
             <Button className="serial-debugger__toggle-button" size="small">
               <p className="serial-debugger__button-text">DTR</p>
             </Button>
@@ -108,57 +113,115 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
           <Divider size="small" />
 
-          {/* 接收设置 */}
           <div>
             <h3 className="serial-debugger__section-title">接收设置</h3>
           </div>
           <div className="serial-debugger__checkbox-row">
             <Checkbox>十六进制显示</Checkbox>
           </div>
-          <div className="serial-debugger__checkbox-row">
-            <Checkbox>自动断帧</Checkbox>
+          <div className="serial-debugger__checkbox_andinput-row">
+            <Checkbox>自动断帧(ms)</Checkbox>
+            <InputNumber<number>
+              min={1}
+              size="small"
+              defaultValue={10}
+              parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+              changeOnWheel
+            />
           </div>
 
           <Divider size="small" />
 
-          {/* 发送设置 */}
           <div>
             <h3 className="serial-debugger__section-title">发送设置</h3>
           </div>
           <div className="serial-debugger__checkbox-row">
             <Checkbox>十六进制发送</Checkbox>
           </div>
-          <div className="serial-debugger__checkbox-row">
-            <Checkbox>定时发送</Checkbox>
+          <div className="serial-debugger__checkbox_andinput-row">
+            <Checkbox>定时发送(s)</Checkbox>
+            <InputNumber<number>
+              min={1}
+              size="small"
+              defaultValue={1000}
+              formatter={formatter}
+              parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
+              changeOnWheel
+            />
           </div>
           <div className="serial-debugger__checkbox-row">
             <Checkbox>显示发送字符串</Checkbox>
+            <ColorPicker
+              style={{ margin: '-10px 0 0 0' }}
+              size="small"
+              format="hex"
+              disabledFormat
+              disabledAlpha
+              presets={[
+                {
+                  label: '常用颜色',
+                  colors: [
+                    // 黑色系 (4种) - 反转
+                    '#000000', // 纯黑
+                    '#424242', // 深灰
+                    '#9E9E9E', // 中浅灰
+                    '#FFFFFF', // 纯白
+
+                    // 红色系 (4种) - 反转
+                    '#C62828', // 暗红
+                    '#F44336', // 正红
+
+                    // 橙色系 (4种) - 反转
+                    '#EF6C00', // 暗橙
+                    '#FF9800', // 正橙
+
+                    // 黄色系 (4种) - 反转
+                    '#F9A825', // 暗黄
+                    '#FFEB3B', // 正黄
+
+                    // 绿色系 (4种) - 反转
+                    '#2E7D32', // 暗绿
+                    '#4CAF50', // 正绿
+
+                    // 蓝色系 (4种) - 反转
+                    '#1565C0', // 暗蓝
+                    '#2196F3', // 正蓝
+
+                    // 紫色系 (4种) - 反转
+                    '#6A1B9A', // 暗紫
+                    '#9C27B0', // 正紫
+                  ],
+                },
+              ]}
+            />
           </div>
           <div className="serial-debugger__checkbox-row">
             <Checkbox>自动重连</Checkbox>
           </div>
         </Splitter.Panel>
 
-        <Splitter.Panel className="right-panel">
-          <div className="send-area">
-            <button className="send-button">
-              <svg
-                width="24"
-                height="24"
-                viewBox="0 0 24 24"
-                fill="none"
-                xmlns="http://www.w3.org/2000/svg"
-              >
-                <path
-                  d="M5 12H19L13 6M13 18L19 12"
-                  stroke="white"
-                  strokeWidth="2"
-                  strokeLinecap="round"
-                  strokeLinejoin="round"
-                />
-              </svg>
-            </button>
-            <div className="send-dropdown">▼</div>
+        <Splitter.Panel>
+          <div className="container">
+            <div className="blue-indicator" />
+            <div className="right-section">
+              <div className="top-section">
+                12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
+              </div>
+              <div className="bottom-section">
+                <div className="send-section">
+                  <TextArea autoSize={{ minRows: 5, maxRows: 5 }}
+                    className="rounded-input"
+                    placeholder="请输入文本..."
+                  />
+                  <div className="send-button-container">
+                    <Button className="send-button">发送</Button>
+                  </div>
+                </div>
+              </div>
+              <div className="log-section">
+                发送0条，接收0条
+              </div>
+            </div>
           </div>
         </Splitter.Panel>
       </Splitter>

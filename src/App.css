@@ -6,12 +6,12 @@ body {
 .serial-debugger {
   display: flex;
   flex-direction: column;
-  background-color: #d9dadb;
   height: 100vh;
 }
 
 .left-panel {
   min-width: 200px;
+  background-color: #f0f0f0;
 }
 
 .serial-debugger__row {
@@ -22,6 +22,7 @@ body {
 
 .serial-debugger__bold-label {
   width: 60px;
+  font-size: 16px;
   font-weight: bold;
   margin-left: 10px;
 }
@@ -38,6 +39,15 @@ body {
   align-items: center;
   gap: 3px;
   margin-bottom: 5px;
+}
+
+.serial-debugger__button-row .serial-debugger__toggle-button-S {
+  flex: 1;
+  min-width: 28px;
+  text-align: center;
+  white-space: nowrap;
+  box-sizing: border-box;
+  /* 确保宽度计算包含padding和border */
 }
 
 .serial-debugger__button-row .serial-debugger__toggle-button {
@@ -77,4 +87,99 @@ body {
 .serial-debugger__checkbox-row {
   margin-bottom: 10px;
   margin-left: 10px;
+}
+
+.serial-debugger__checkbox_andinput-row {
+  display: flex;
+  align-items: center;
+  /* 添加间距 */
+  margin-bottom: 10px;
+  margin-left: 10px;
+  margin-right: 10px;
+}
+
+.serial-debugger__checkbox_andinput-row .ant-checkbox-wrapper {
+  flex-shrink: 0;
+  /* 防止 Checkbox 被压缩 */
+  white-space: nowrap;
+  /* 防止文字换行 */
+}
+
+.serial-debugger__checkbox_andinput-row .ant-input-number {
+  flex: 1;
+  /* 占据剩余所有空间 */
+  min-width: 0;
+  /* 重要：让 flex 子元素可以收缩到0 */
+}
+
+.container {
+  display: flex;
+  width: 100%;
+  height: 100%;
+}
+
+
+.right-section {
+  position: relative;
+  width: 100%;
+  height: 100%;
+  overflow: hidden;
+  background-color: #f1f1f1;
+}
+
+.top-section {
+  height: calc(100% - 150px);
+  overflow: hidden;
+  padding: 10px;
+  box-sizing: border-box;
+  word-wrap: break-word;
+  /* 兼容旧版本 */
+  overflow-wrap: break-word;
+  /* 标准属性 */
+}
+
+.bottom-section {
+  position: absolute;
+  left: 0;
+  right: 0;
+  bottom: 30px;
+  height: 110px;
+}
+
+.send-section {
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  height: 100%;
+  padding: 0px;
+}
+
+.log-section {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 20px;
+}
+
+.rounded-input {
+  transition: all 0.3s;
+  width: 100%;
+  margin-right: 10px;
+  margin-left: 5px;
+}
+
+.send-button {
+  height: 120px;
+  margin-right: 5px;
+  background-color: #0ca4dc;
+  color: rgb(255, 255, 255);
+}
+
+.log-section {
+  display: flex;
+  align-items: center;
+  justify-content: right;
+  background-color: #f0f0f0;
+  border-top: 1px solid #d9dadb;
 }
