@@ -209,7 +209,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               </div>
               <div className="bottom-section">
                 <div className="send-section">
-                  <TextArea autoSize={{ minRows: 5, maxRows: 5 }}
+                  <TextArea
+                    autoSize={{ minRows: 5, maxRows: 5 }}
                     className="rounded-input"
                     placeholder="请输入文本..."
                   />
