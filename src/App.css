@@ -30,6 +30,52 @@ body {
   scrollbar-width: none;
 }
 
+.bottom-bar {
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0px;
+  height: 40px;
+  box-sizing: border-box;
+  margin-right: 10px;
+  margin-left: 10px;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  transition: all 0.3s ease;
+}
+
+.inner-icon {
+  display: flex;
+  flex: 1;
+  align-items: center;
+  justify-content: center;
+  height: 30px;
+  margin-top: 10px;
+  background-color: rgb(15, 119, 157);
+  transition: all 0.2s ease;
+  color: white;
+}
+
+.inner-icon:hover {
+  margin-top: 0px;
+  background-color: rgb(0, 9, 183);
+  cursor: pointer;
+  height: 40px;
+}
+
+.icon {
+  transition: all 0.3s ease;
+}
+
+.inner-icon:hover .icon {
+  font-size: 1.5em;
+}
+
+.inner-icon:hover .setting-icon {
+  transform: rotate(180deg);
+}
+
 .row {
   display: flex;
   align-items: center;
@@ -187,28 +233,4 @@ body {
   justify-content: right;
   background-color: #f0f0f0;
   border-top: 1px solid #d9dadb;
-}
-
-.bottom-bar {
-  position: absolute;
-  bottom: 0;
-  left: 0;
-  right: 0px;
-  height: 30px;
-  box-sizing: border-box;
-  margin-right: 10px;
-  margin-left: 10px;
-  border-radius: 6px 6px 0 0;
-  background-color: rgb(15, 119, 157);
-  height: 30px;
-  color: white;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  transition: all 0.3s ease;
-}
-
-.bottom-bar:hover {
-  height: 38px;
-  background-color: rgb(27, 42, 161);
 }

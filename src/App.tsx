@@ -1,9 +1,10 @@
 import React from 'react';
 import './App.css';
-import { Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
+import { Tooltip, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
 import { InputNumber } from 'antd';
 import { ColorPicker } from 'antd';
 import { Input } from 'antd';
+import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 // 自定义组件类型定义
 interface SerialDebuggerProps {
@@ -201,7 +202,18 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             <div style={{ height: "30px" }}></div>
           </div>
           <div className="bottom-bar">
-            设置
+            <div className='inner-icon'>
+              <ShrinkOutlined className='icon shrink-icon' />
+            </div>
+            <div className='inner-icon'>
+              <ToTopOutlined className='icon to-top-icon' />
+            </div>
+            <div className='inner-icon'>
+              <ClearOutlined className='icon clear-icon' />
+            </div>
+            <div className='inner-icon'>
+              <SettingOutlined className='icon setting-icon' />
+            </div>
           </div>
         </Splitter.Panel>
 
