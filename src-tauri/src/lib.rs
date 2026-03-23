@@ -1,20 +1,21 @@
-use serde::Serialize;
-use std::{iter::Product, sync::Mutex};
-use tokio_serial::UsbPortInfo;
+use serde::{Deserialize, Serialize};
+use std::sync::Mutex;
+use tauri::State;
+use tokio::sync::mpsc;
 
 #[derive(Debug, Serialize, Clone)]
 struct SerialDevice {
     name: String,
     port: String,
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 enum CheckBit {
     Odd,
     Even,
     None,
     Mark,
 }
-#[derive(Debug, Serialize, Clone)]
+#[derive(Debug, Serialize, Clone, Deserialize)]
 struct SerialConfig {
     byte_bit: u8,
     stop_bit: u8,
@@ -23,21 +24,29 @@ struct SerialConfig {
     dtr_enable: bool,
     rts_enable: bool,
 }
-struct AppState {
+#[derive(Debug, Serialize, Clone, Deserialize)]
+struct OutputState {
     serial_open_status: bool,
     output_string: String,
     receive_count: u64,
     send_count: u64,
+}
+#[derive(Debug, Serialize, Clone, Deserialize)]
+struct ConfigState {
     current_serial_config: SerialConfig,
+    hex_show: bool,
 }
 
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let app_state = Mutex::new(AppState {
+    let output_state = Mutex::new(OutputState {
         serial_open_status: false,
         output_string: String::new(),
         receive_count: 0,
         send_count: 0,
+    });
+
+    let config_state = ConfigState {
         current_serial_config: SerialConfig {
             byte_bit: 8,
             stop_bit: 1,
@@ -46,11 +55,20 @@ pub fn run() {
             dtr_enable: false,
             rts_enable: false,
         },
-    });
+        hex_show: false,
+    };
+
+    // let send_mpsc = mpsc
     tauri::Builder::default()
-        .manage(app_state)
+        .manage(output_state)
+        .manage(config_state)
         .plugin(tauri_plugin_opener::init())
-        .invoke_handler(tauri::generate_handler![scan_serial])
+        .invoke_handler(tauri::generate_handler![
+            scan_serial,
+            update_config,
+            clean_output,
+            get_config
+        ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
 }
@@ -98,6 +116,35 @@ async fn scan_serial() -> Vec<SerialDevice> {
         }
     }
     devices
+}
+
+#[tauri::command]
+async fn update_config(
+    new_config: ConfigState,
+    config_state: State<'_, Mutex<ConfigState>>,
+) -> Result<(), ()> {
+    if let Ok(mut config_state) = config_state.lock() {
+        *config_state = new_config;
+    }
+    Ok(())
+}
+
+#[tauri::command]
+async fn get_config(config_state: State<'_, Mutex<ConfigState>>) -> Result<ConfigState, ()> {
+    if let Ok(config_state) = config_state.lock() {
+        return Ok(config_state.clone());
+    }
+    Err(())
+}
+
+#[tauri::command]
+async fn clean_output(output_state: State<'_, Mutex<OutputState>>) -> Result<(), ()> {
+    if let Ok(mut output_state) = output_state.lock() {
+        output_state.output_string.clear();
+        output_state.receive_count = 0;
+        output_state.send_count = 0;
+    }
+    Ok(())
 }
 
 #[cfg(test)]
