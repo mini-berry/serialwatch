@@ -1,9 +1,6 @@
 import React from 'react';
 import './App.css';
-import { Tooltip, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
-import { InputNumber } from 'antd';
-import { ColorPicker } from 'antd';
-import { Input } from 'antd';
+import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 // 自定义组件类型定义
