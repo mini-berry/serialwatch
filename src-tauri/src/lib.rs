@@ -1,7 +1,10 @@
 use serde::{Deserialize, Serialize};
-use std::sync::Mutex;
+use std::sync::Arc;
+use tauri::async_runtime::Receiver;
 use tauri::State;
 use tokio::sync::mpsc;
+use tokio::sync::mpsc::Sender;
+use tokio::sync::Mutex;
 
 #[derive(Debug, Serialize, Clone)]
 struct SerialDevice {
@@ -36,7 +39,10 @@ struct ConfigState {
     current_serial_config: SerialConfig,
     hex_show: bool,
 }
-
+#[derive(Debug, Clone)]
+struct SenderState {
+    sender: Arc<Sender<Vec<u8>>>,
+}
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
     let output_state = Mutex::new(OutputState {
@@ -58,10 +64,19 @@ pub fn run() {
         hex_show: false,
     };
 
-    // let send_mpsc = mpsc
+    let (send_sender, send_receiver) = mpsc::channel::<Vec<u8>>(10);
+    let send_sender = Arc::new(send_sender);
+    let send_receiver = Arc::new(send_receiver);
+    let send_state = SenderState {
+        sender: send_sender,
+    };
+
+    tokio::task::spawn(serial_thread(send_receiver));
+
     tauri::Builder::default()
         .manage(output_state)
         .manage(config_state)
+        .manage(send_state)
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             scan_serial,
@@ -118,31 +133,45 @@ async fn scan_serial() -> Vec<SerialDevice> {
     devices
 }
 
+async fn serial_thread(config_state: Arc<Receiver<Vec<u8>>>) {}
+
 #[tauri::command]
 async fn update_config(
     new_config: ConfigState,
     config_state: State<'_, Mutex<ConfigState>>,
 ) -> Result<(), ()> {
-    if let Ok(mut config_state) = config_state.lock() {
-        *config_state = new_config;
-    }
+    let mut config_state = config_state.lock().await;
+    *config_state = new_config;
     Ok(())
 }
 
 #[tauri::command]
 async fn get_config(config_state: State<'_, Mutex<ConfigState>>) -> Result<ConfigState, ()> {
-    if let Ok(config_state) = config_state.lock() {
-        return Ok(config_state.clone());
-    }
-    Err(())
+    let config_state = config_state.lock().await;
+    return Ok(config_state.clone());
 }
 
 #[tauri::command]
 async fn clean_output(output_state: State<'_, Mutex<OutputState>>) -> Result<(), ()> {
-    if let Ok(mut output_state) = output_state.lock() {
-        output_state.output_string.clear();
-        output_state.receive_count = 0;
-        output_state.send_count = 0;
+    let mut output_state = output_state.lock().await;
+    output_state.output_string.clear();
+    output_state.receive_count = 0;
+    output_state.send_count = 0;
+
+    Ok(())
+}
+
+#[tauri::command]
+async fn send_msg(msg: Vec<u8>, sender: State<'_, SenderState>) -> Result<(), ()> {
+    match sender.sender.send(msg.clone()).await {
+        Ok(()) => {
+            #[cfg(debug_assertions)]
+            println!("{msg:#?}")
+        }
+        Err(_) => {
+            #[cfg(debug_assertions)]
+            println!("msg send fail")
+        }
     }
     Ok(())
 }
