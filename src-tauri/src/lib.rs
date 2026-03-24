@@ -2,6 +2,7 @@ use serde::{Deserialize, Serialize};
 use std::sync::Arc;
 use tauri::async_runtime::Receiver;
 use tauri::State;
+use tokio::select;
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio::sync::Mutex;
@@ -52,7 +53,9 @@ pub fn run() {
         send_count: 0,
     });
 
-    let config_state = ConfigState {
+    let output_state = Arc::new(output_state);
+
+    let config_state = Mutex::new(ConfigState {
         current_serial_config: SerialConfig {
             byte_bit: 8,
             stop_bit: 1,
@@ -62,16 +65,17 @@ pub fn run() {
             rts_enable: false,
         },
         hex_show: false,
-    };
+    });
+    let config_state = Arc::new(config_state);
 
     let (send_sender, send_receiver) = mpsc::channel::<Vec<u8>>(10);
     let send_sender = Arc::new(send_sender);
-    let send_receiver = Arc::new(send_receiver);
     let send_state = SenderState {
         sender: send_sender,
     };
 
-    tokio::task::spawn(serial_thread(send_receiver));
+    let rt = tokio::runtime::Runtime::new().unwrap();
+    rt.spawn(serial_thread(send_receiver));
 
     tauri::Builder::default()
         .manage(output_state)
@@ -82,7 +86,8 @@ pub fn run() {
             scan_serial,
             update_config,
             clean_output,
-            get_config
+            get_config,
+            send_msg
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -130,15 +135,26 @@ async fn scan_serial() -> Vec<SerialDevice> {
             eprintln!("Error scanning serial ports: {}", e);
         }
     }
+    devices.sort_by(|a, b| a.name.cmp(&b.name));
     devices
 }
 
-async fn serial_thread(config_state: Arc<Receiver<Vec<u8>>>) {}
+async fn serial_thread(mut config_state: Receiver<Vec<u8>>) {
+    loop {
+        select! {
+            Some(data) = config_state.recv() =>{
+                println!("{data:?}");
+            }
+            _=tokio::time::sleep(tokio::time::Duration::from_millis(100))=>{
+            }
+        }
+    }
+}
 
 #[tauri::command]
 async fn update_config(
     new_config: ConfigState,
-    config_state: State<'_, Mutex<ConfigState>>,
+    config_state: State<'_, Arc<Mutex<ConfigState>>>,
 ) -> Result<(), ()> {
     let mut config_state = config_state.lock().await;
     *config_state = new_config;
@@ -146,13 +162,13 @@ async fn update_config(
 }
 
 #[tauri::command]
-async fn get_config(config_state: State<'_, Mutex<ConfigState>>) -> Result<ConfigState, ()> {
+async fn get_config(config_state: State<'_, Arc<Mutex<ConfigState>>>) -> Result<ConfigState, ()> {
     let config_state = config_state.lock().await;
     return Ok(config_state.clone());
 }
 
 #[tauri::command]
-async fn clean_output(output_state: State<'_, Mutex<OutputState>>) -> Result<(), ()> {
+async fn clean_output(output_state: State<'_, Arc<Mutex<OutputState>>>) -> Result<(), ()> {
     let mut output_state = output_state.lock().await;
     output_state.output_string.clear();
     output_state.receive_count = 0;
