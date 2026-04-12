@@ -1,20 +1,104 @@
-import React from 'react';
+import React, { useState, useEffect } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
+import { invoke } from '@tauri-apps/api/core';
+
 // 自定义组件类型定义
 interface SerialDebuggerProps {
   // 可以添加props定义
 }
-const { TextArea } = Input;
-const formatter: InputNumberProps<number>['formatter'] = (value) => {
-  if (value === undefined || value === null) return '0.0';
-  const formattedValue = (value / 10).toFixed(1);
-  return `${formattedValue}`;
-};
+
+interface SerialConfig {
+  port: string;
+  baud: number;
+  data_bits: number;
+  parity: 'None' | 'Odd' | 'Even';
+  stop_bits: number;
+  dtr_enable: boolean;
+  rts_enable: boolean;
+  open_status: boolean;
+}
+interface SerialDevice {
+  name: string;
+  port: string;
+}
+// const send_data = async () => {
+//   // 发送数据的逻辑
+// };
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
+  useEffect(() => {
+    invoke('scan_serial').then((devices) => {
+      let deviceList = devices as Array<SerialDevice>;
+      setSerialList(deviceList);
+
+      if (deviceList.length > 0) {
+        let nextConfig: SerialConfig = {
+          ...serial_config,
+          ['port']: deviceList[0].port,
+        };
+        setSerialConfig(nextConfig);
+        invoke('update_config', { newConfig: nextConfig });
+      }
+    })
+  }, []);
+
+  const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
+  const [serial_config, setSerialConfig] = useState<SerialConfig>({
+    port: '',
+    baud: 9600,
+    data_bits: 8,
+    parity: 'None',
+    stop_bits: 1,
+    dtr_enable: false,
+    rts_enable: false,
+    open_status: false,
+  });
+
+  const { TextArea } = Input;
+  const formatter: InputNumberProps<number>['formatter'] = (value) => {
+    if (value === undefined || value === null) return '0.0';
+    const formattedValue = (value / 10).toFixed(1);
+    return `${formattedValue}`;
+  };
+
+  const open_serial = async () => {
+    if (serial_list.some(device => device.port === serial_config.port)) {
+      const nextConfig = {
+        ...serial_config,
+        open_status: !serial_config.open_status,
+      };
+      setSerialConfig(nextConfig);
+      await invoke('update_config', { newConfig: nextConfig });
+    }
+  }
+
+  const scan_serial = async () => {
+    await invoke('scan_serial').then((devices) => {
+      setSerialList(devices as Array<SerialDevice>);
+    });
+  }
+  const config_change = async <K extends keyof SerialConfig>(key: K, value: SerialConfig[K]) => {
+    const nextConfig = {
+      ...serial_config,
+      [key]: value,
+    };
+    setSerialConfig(nextConfig);
+    await invoke('update_config', { newConfig: nextConfig });
+  };
+
+  const config_change_flow = async (index: number) => {
+    const key = index === 0 ? 'dtr_enable' : 'rts_enable';
+    const nextConfig = {
+      ...serial_config,
+      [key]: !serial_config[key],
+    };
+    setSerialConfig(nextConfig);
+    await invoke('update_config', { newConfig: nextConfig });
+  };
+
   return (
     <div className="main-container">
       <Splitter className="splitter">
@@ -22,70 +106,85 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
-              <Select className="select" />
+              <Select<string>
+                className="select"
+                value={serial_config.port}
+                options={serial_list.map((device) => ({
+                  value: device.port,
+                  label: `${device.port}-${device.name}`,
+                }))}
+                onChange={(value) => config_change('port', value)}
+                onActive={scan_serial}
+              />
             </div>
 
             <div className="row">
               <label className="label">波特率</label>
-              <Select
+              <Select<number>
+                value={serial_config.baud}
+                onChange={(value) => config_change('baud', value)}
                 className="select"
                 options={[
-                  { value: '300', label: '300' },
-                  { value: '600', label: '600' },
-                  { value: '1200', label: '1,200' },
-                  { value: '2400', label: '2,400' },
-                  { value: '4800', label: '4,800' },
-                  { value: '9600', label: '9,600' },
-                  { value: '19200', label: '19,200' },
-                  { value: '38400', label: '38,400' },
-                  { value: '57600', label: '57,600' },
-                  { value: '115200', label: '115,200' },
-                  { value: '128000', label: '128,000' },
-                  { value: '230400', label: '230,400' },
-                  { value: '256000', label: '256,000' },
-                  { value: '460800', label: '460,800' },
-                  { value: '921600', label: '921,600' },
-                  { value: '1000000', label: '1,000,000' },
-                  { value: '1500000', label: '1,500,000' },
-                  { value: '2000000', label: '2,000,000' },
+                  { value: 300, label: '300' },
+                  { value: 600, label: '600' },
+                  { value: 1200, label: '1,200' },
+                  { value: 2400, label: '2,400' },
+                  { value: 4800, label: '4,800' },
+                  { value: 9600, label: '9,600' },
+                  { value: 19200, label: '19,200' },
+                  { value: 38400, label: '38,400' },
+                  { value: 57600, label: '57,600' },
+                  { value: 115200, label: '115,200' },
+                  { value: 128000, label: '128,000' },
+                  { value: 230400, label: '230,400' },
+                  { value: 256000, label: '256,000' },
+                  { value: 460800, label: '460,800' },
+                  { value: 921600, label: '921,600' },
+                  { value: 1000000, label: '1,000,000' },
+                  { value: 1500000, label: '1,500,000' },
+                  { value: 2000000, label: '2,000,000' },
                 ]}
               />
             </div>
 
             <div className="row">
               <label className="label">数据位</label>
-              <Select
+              <Select<number>
+                value={serial_config.data_bits}
+                onChange={(value) => config_change('data_bits', value)}
                 className="select"
                 options={[
-                  { value: '5', label: '5' },
-                  { value: '6', label: '6' },
-                  { value: '7', label: '7' },
-                  { value: '8', label: '8' },
+                  { value: 5, label: '5' },
+                  { value: 6, label: '6' },
+                  { value: 7, label: '7' },
+                  { value: 8, label: '8' },
                 ]}
               />
             </div>
 
             <div className="row">
               <label className="label">校验位</label>
-              <Select
+              <Select<SerialConfig['parity']>
+                value={serial_config.parity}
+                onChange={(value) => config_change('parity', value)}
                 className="select"
                 options={[
-                  { value: 'none', label: 'None' },
-                  { value: 'even', label: 'Even' },
-                  { value: 'mark', label: 'Mark' },
-                  { value: 'odd', label: 'Odd' },
+                  { value: 'None', label: 'None' },
+                  { value: 'Odd', label: 'Odd' },
+                  { value: 'Even', label: 'Even' },
                 ]}
               />
             </div>
 
             <div className="row">
               <label className="label">停止位</label>
-              <Select
+              <Select<number>
+                value={serial_config.stop_bits}
+                onChange={(value) => config_change('stop_bits', value)}
                 className="select"
                 options={[
-                  { value: '1', label: '1' },
-                  { value: '1.5', label: '1.5' },
-                  { value: '2', label: '2' },
+                  { value: 1, label: '1' },
+                  { value: 2, label: '2' },
                 ]}
               />
             </div>
@@ -97,16 +196,18 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                 <Radio.Button value="RI">CTS</Radio.Button>
               </Radio.Group>
 
-              <Button className="little-button" size="small">
+              <Button className="little-button" type={serial_config.dtr_enable ? 'primary' : 'default'} size="small" onClick={() => config_change_flow(0)}>
                 <p>DTR</p>
               </Button>
-              <Button className="little-button" style={{ marginRight: '10px' }} size="small">
+              <Button className="little-button" type={serial_config.rts_enable ? 'primary' : 'default'} style={{ marginRight: '10px' }} size="small" onClick={() => config_change_flow(1)}>
                 <p>RTS</p>
               </Button>
             </div>
 
             <div className="open-row">
-              <Button className="open-button">打开</Button>
+              <Button className="open-button" color={serial_config.open_status ? 'red' : 'blue'} variant="solid" onClick={open_serial}>
+                {serial_config.open_status ? '关闭' : '打开'}
+              </Button>
             </div>
 
             <Divider size="small" />
@@ -232,7 +333,11 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                   placeholder="请输入文本..."
                 />
                 <div className="send-button-container">
-                  <Button className="send-button">发送</Button>
+                  <Button className="send-button"
+                  // onClick={send_data}
+                  >
+                    发送
+                  </Button>
                 </div>
               </div>
             </div>
