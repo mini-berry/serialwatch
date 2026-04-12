@@ -44,7 +44,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       }
     })
   }, []);
-
+  const [receive_data, setReceiveData] = useState<Uint8Array>(new Uint8Array());
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
     port: '',
