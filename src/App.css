@@ -176,6 +176,7 @@ body {
   word-wrap: break-word;
   /* 兼容旧版本 */
   overflow-wrap: break-word;
+  width: 100%;
   /* 标准属性 */
   border-bottom: 1px solid #d9dadb;
 

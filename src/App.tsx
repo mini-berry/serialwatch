@@ -45,6 +45,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     })
   }, []);
   const [receive_data, setReceiveData] = useState<Uint8Array>(new Uint8Array());
+  const [receive_text, _setReceiveText] = useState<string>('');
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
     port: '',
@@ -63,7 +64,10 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     const formattedValue = (value / 10).toFixed(1);
     return `${formattedValue}`;
   };
-
+  const clean_output = () => {
+    setReceiveData(new Uint8Array());
+    _setReceiveText('');
+  }
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
       const nextConfig = {
@@ -306,7 +310,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             <div className='inner-icon'>
               <ToTopOutlined className='icon to-top-icon' />
             </div>
-            <div className='inner-icon'>
+            <div className='inner-icon' onClick={clean_output}>
               <ClearOutlined className='icon clear-icon' />
             </div>
             <div className='inner-icon'>
@@ -318,12 +322,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         <Splitter.Panel>
           <div className="right-splitter">
             <div className="show-section">
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
-              12312312313333333333333333333333333333333333333333333333333333333333333333333333333333333333333333
+              {receive_text}
             </div>
             <div className="send-section">
               <div className="text-section">
