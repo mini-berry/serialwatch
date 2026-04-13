@@ -4,6 +4,7 @@ import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Di
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
+import { listen } from '@tauri-apps/api/event';
 
 // 自定义组件类型定义
 interface SerialDebuggerProps {
@@ -24,28 +25,69 @@ interface SerialDevice {
   name: string;
   port: string;
 }
-// const send_data = async () => {
-//   // 发送数据的逻辑
-// };
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   useEffect(() => {
+    let unlistenDataUpdated: (() => void) | undefined;
+    let unlistenSerialFailed: (() => void) | undefined;
+
     invoke('scan_serial').then((devices) => {
       let deviceList = devices as Array<SerialDevice>;
       setSerialList(deviceList);
 
       if (deviceList.length > 0) {
-        let nextConfig: SerialConfig = {
-          ...serial_config,
-          ['port']: deviceList[0].port,
-        };
-        setSerialConfig(nextConfig);
-        invoke('update_config', { newConfig: nextConfig });
+        setSerialConfig((prevConfig) => {
+          const nextConfig: SerialConfig = {
+            ...prevConfig,
+            port: deviceList[0].port,
+          };
+          invoke('update_config', { newConfig: nextConfig });
+          return nextConfig;
+        });
       }
-    })
+    });
+
+    const setupListeners = async () => {
+      unlistenDataUpdated = await listen('data-updated', (event) => {
+        console.log('Received data-updated event:', event.payload);
+        const data = event.payload as Array<number>;
+        const uint8Data = new Uint8Array(data);
+        setReceiveData((prevData) => {
+          const combinedData = new Uint8Array(prevData.length + uint8Data.length);
+          combinedData.set(prevData);        // 将 prevData 复制到 combinedData 的开头
+          combinedData.set(uint8Data, prevData.length);  // 将 uint8Data 追加到 combinedData 的末尾
+          return combinedData;               // 返回合并后的 Uint8Array
+        });
+        const textDecoder = new TextDecoder();
+        const decodedText = textDecoder.decode(uint8Data);
+        setReceiveText((prev) => prev + decodedText);
+      });
+
+      unlistenSerialFailed = await listen('serial-failed', (event) => {
+        const errorMessage = event.payload as string;
+        setSerialConfig((prevConfig) => ({
+          ...prevConfig,
+          open_status: false, // 连接失败时将状态设置为未打开
+        }));
+        console.error('Serial error:', errorMessage);
+        // 可以在这里显示错误提示给用户，例如使用一个状态变量来控制错误提示的显示
+      });
+    };
+
+    setupListeners();
+
+    return () => {
+      if (unlistenDataUpdated) {
+        unlistenDataUpdated();
+      }
+      if (unlistenSerialFailed) {
+        unlistenSerialFailed();
+      }
+    };
   }, []);
-  const [receive_data, setReceiveData] = useState<Uint8Array>(new Uint8Array());
-  const [receive_text, _setReceiveText] = useState<string>('');
+  const [_receive_data, setReceiveData] = useState<Uint8Array>(new Uint8Array());
+  const [send_data, setSendData] = useState<string>('');
+  const [receive_text, setReceiveText] = useState<string>('');
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
     port: '',
@@ -66,7 +108,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   };
   const clean_output = () => {
     setReceiveData(new Uint8Array());
-    _setReceiveText('');
+    setReceiveText('');
   }
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
@@ -92,6 +134,11 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     setSerialConfig(nextConfig);
     await invoke('update_config', { newConfig: nextConfig });
   };
+
+  const send_msg = async () => {
+    let data = new TextEncoder().encode(send_data);
+    await invoke('send_msg', { msg: data });
+  }
 
   const config_change_flow = async (index: number) => {
     const key = index === 0 ? 'dtr_enable' : 'rts_enable';
@@ -328,12 +375,14 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               <div className="text-section">
                 <TextArea
                   autoSize={{ minRows: 5, maxRows: 5 }}
+                  value={send_data}
+                  onChange={(e) => setSendData(e.target.value)}
                   className="text-area"
                   placeholder="请输入文本..."
                 />
                 <div className="send-button-container">
                   <Button className="send-button"
-                  // onClick={send_data}
+                    onClick={send_msg}
                   >
                     发送
                   </Button>

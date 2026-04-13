@@ -76,6 +76,28 @@ body {
   transform: rotate(180deg);
 }
 
+@keyframes brushSweep {
+  0% {
+    transform: translateX(0%)
+  }
+
+  30% {
+    transform: translateX(-20%)
+  }
+
+  70% {
+    transform: translateX(15%)
+  }
+
+  100% {
+    transform: translateX(0%)
+  }
+}
+
+.inner-icon:hover .clear-icon {
+  animation: brushSweep 0.5s ease-in-out;
+}
+
 .row {
   display: flex;
   align-items: center;

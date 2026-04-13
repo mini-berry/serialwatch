@@ -9,7 +9,13 @@ use tokio::sync::Mutex;
 use tokio_serial::SerialPortBuilderExt;
 
 mod config;
-
+#[allow(dead_code)]
+#[derive(Debug, Serialize, Clone)]
+enum MsgToFrontend {
+    DataUpdated(Vec<u8>),
+    SerialFailed(String),
+    Tips(String),
+}
 #[derive(Debug, Serialize, Clone)]
 struct SerialDevice {
     name: String,
@@ -39,6 +45,7 @@ pub fn run() {
     });
 
     let output_state = Arc::new(output_state);
+    let output_state_clone = output_state.clone();
 
     let (config_sender, config_receiver) = mpsc::channel::<config::SerialConfig>(1);
     let config_sender = Arc::new(config_sender);
@@ -50,14 +57,56 @@ pub fn run() {
     let msg_sender = Arc::new(msg_sender);
     let msg_state = MsgSenderState { sender: msg_sender };
 
+    let (data_sender, mut data_receiver) = mpsc::channel::<MsgToFrontend>(10);
+
     let rt = tokio::runtime::Runtime::new().unwrap();
     rt.spawn(serial_thread(
+        data_sender,
         msg_receiver,
         config_receiver,
-        output_state.clone(),
+        output_state_clone,
     ));
 
     tauri::Builder::default()
+        .setup(|_app| {
+            let app_handle = _app.handle().clone();
+            use tauri::Emitter;
+            std::thread::spawn(move || loop {
+                match data_receiver.blocking_recv() {
+                    Some(MsgToFrontend::DataUpdated(data)) => {
+                        #[cfg(debug_assertions)]
+                        println!("Main thread received data: {:?}", data);
+                        app_handle.emit("data-updated", data).unwrap_or_else(|err| {
+                            eprintln!("Failed to emit event: {err}");
+                        });
+                    }
+                    Some(MsgToFrontend::SerialFailed(err)) => {
+                        #[cfg(debug_assertions)]
+                        println!("Main thread received serial error: {err}");
+                        app_handle.emit("serial-failed", err).unwrap_or_else(|err| {
+                            eprintln!("Failed to emit event: {err}");
+                        });
+                    }
+                    Some(MsgToFrontend::Tips(msg)) => {
+                        #[cfg(debug_assertions)]
+                        println!("Main thread received a tip: {msg}");
+                        app_handle
+                            .emit("tips", msg)
+                            .unwrap_or_else(|err| {
+                                eprintln!("Failed to emit event: {err}");
+                            });
+                    }
+                    None => {
+                        #[cfg(debug_assertions)]
+                        println!(
+                            "Data sender has been disconnected. Exiting data receiver thread."
+                        );
+                        break;
+                    }
+                }
+            });
+            Ok(())
+        })
         .manage(output_state)
         .manage(config_state)
         .manage(msg_state)
@@ -73,6 +122,7 @@ pub fn run() {
 }
 
 async fn serial_thread(
+    data_sender: Sender<MsgToFrontend>,
     mut msg_receiver: Receiver<Vec<u8>>,
     mut config_receiver: Receiver<config::SerialConfig>,
     output_state: Arc<Mutex<StatusState>>,
@@ -133,15 +183,21 @@ async fn serial_thread(
                                 output_state.lock().await.receive_count += received_data.len() as u64;
                                 #[cfg(debug_assertions)]
                                 println!("Received data: {:?}", received_data);
+                                data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|err| {
+                                    eprintln!("Failed to send data to main thread: {err}");
+                                });
                             }
                             Ok(_) => {}
                             Err(e) => {
                                 eprintln!("Error reading from serial port: {}", e);
                                 serial_port = None;
+                                data_sender.send(MsgToFrontend::SerialFailed(format!("{e}"))).await.unwrap_or_else(|err| {
+                                    eprintln!("Failed to send error to main thread: {err}");
+                                });
                             }
                         }
                     }
-                    _  =  tokio::time::sleep(std::time::Duration::from_millis(100)) => {}
+                    _  =  tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
                 }
             }
             None => {}
@@ -151,7 +207,7 @@ async fn serial_thread(
         match data {
             Ok(msg) => {
                 #[cfg(debug_assertions)]
-                println!("Received message in serial thread: {msg:#?}");
+                println!("Received message in serial thread: {msg:?}");
                 if let Some(port) = serial_port.as_mut() {
                     match port.write_all(&msg).await {
                         Ok(()) => {
@@ -176,6 +232,7 @@ async fn serial_thread(
                 break;
             }
         }
+        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
 }
 #[tauri::command]
@@ -257,11 +314,11 @@ async fn send_msg(msg: Vec<u8>, sender: State<'_, MsgSenderState>) -> Result<(),
     match sender.sender.send(msg.clone()).await {
         Ok(()) => {
             #[cfg(debug_assertions)]
-            println!("{msg:#?}")
+            println!("Message received from the frontend successfully: {msg:?}");
         }
         Err(_) => {
             #[cfg(debug_assertions)]
-            println!("msg send fail")
+            println!("Failed to send message");
         }
     }
     Ok(())
