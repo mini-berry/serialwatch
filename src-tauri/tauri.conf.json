@@ -12,7 +12,7 @@
   "app": {
     "windows": [
       {
-        "title": "serialwatch",
+        "title": "串口调试助手 S.W.R.",
         "width": 800,
         "height": 600
       }

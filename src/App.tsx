@@ -3,6 +3,7 @@ import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
+import { message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
@@ -27,9 +28,11 @@ interface SerialDevice {
 }
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
+  const [messageApi, contextHolder] = message.useMessage();
   useEffect(() => {
     let unlistenDataUpdated: (() => void) | undefined;
     let unlistenSerialFailed: (() => void) | undefined;
+    // let unlistenSerialError: (() => void) | undefined;
 
     invoke('scan_serial').then((devices) => {
       let deviceList = devices as Array<SerialDevice>;
@@ -69,8 +72,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           ...prevConfig,
           open_status: false, // 连接失败时将状态设置为未打开
         }));
-        console.error('Serial error:', errorMessage);
-        // 可以在这里显示错误提示给用户，例如使用一个状态变量来控制错误提示的显示
+        messageApi.error(`串口错误: ${errorMessage}`);
       });
     };
 
@@ -153,7 +155,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div className="main-container">
       <Splitter className="splitter">
-        <Splitter.Panel className="left-splitter" >
+        <Splitter.Panel className="left-splitter" min={200} defaultSize={200}>
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
@@ -369,6 +371,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         <Splitter.Panel>
           <div className="right-splitter">
             <div className="show-section">
+              {contextHolder}
               {receive_text}
             </div>
             <div className="send-section">
