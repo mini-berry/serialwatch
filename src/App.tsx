@@ -52,18 +52,25 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
     const setupListeners = async () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
-        console.log('Received data-updated event:', event.payload);
         const data = event.payload as Array<number>;
         const uint8Data = new Uint8Array(data);
-        setReceiveData((prevData) => {
-          const combinedData = new Uint8Array(prevData.length + uint8Data.length);
-          combinedData.set(prevData);        // 将 prevData 复制到 combinedData 的开头
-          combinedData.set(uint8Data, prevData.length);  // 将 uint8Data 追加到 combinedData 的末尾
-          return combinedData;               // 返回合并后的 Uint8Array
-        });
-        const textDecoder = new TextDecoder();
-        const decodedText = textDecoder.decode(uint8Data);
-        setReceiveText((prev) => prev + decodedText);
+        if (!hex_show) {
+          const textDecoder = new TextDecoder();
+          const decodedText = textDecoder.decode(uint8Data);
+          setReceiveText((prev) => prev + decodedText);
+        }
+        else {
+          const hexString = Array.from(uint8Data)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join(' ');
+
+          console.log('Updated hex:', hexString);
+          setReceiveText((prev) => prev + ' ' + hexString);
+        }
+
+        if (receive_text.length > 5000) {
+          setReceiveText((prev) => prev.slice(5000));
+        }
       });
 
       unlistenSerialFailed = await listen('serial-failed', (event) => {
@@ -87,7 +94,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       }
     };
   }, []);
-  const [_receive_data, setReceiveData] = useState<Uint8Array>(new Uint8Array());
+  const [hex_show, setHexShow] = useState<boolean>(false);
+  const [hex_send, setHexSend] = useState<boolean>(false);
   const [send_data, setSendData] = useState<string>('');
   const [receive_text, setReceiveText] = useState<string>('');
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
@@ -109,7 +117,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     return `${formattedValue}`;
   };
   const clean_output = () => {
-    setReceiveData(new Uint8Array());
     setReceiveText('');
   }
   const open_serial = async () => {
@@ -123,6 +130,38 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     }
   }
 
+  const format_hex = (str: string) => {
+    const hexString = str.toUpperCase().replace(/[^0-9A-F]/g, '').replace(/(.{2})/g, '$1 ').trim();
+    return hexString;
+  }
+  const input_change = (e: any) => {
+    if (!hex_send) {
+      setSendData(e.target.value);
+    }
+    else {
+      const inputValue = e.target.value;
+      setSendData(format_hex(inputValue));
+    }
+  }
+  const hex_send_change = (e: any) => {
+    setHexSend(e.target.checked);
+    if (!e.target.checked) {
+      // 从十六进制转换回文本
+      const hexString = send_data.replace(/[^0-9A-F]/g, '');
+      const bytes = new Uint8Array(hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
+      const textDecoder = new TextDecoder();
+      const decodedText = textDecoder.decode(bytes).replace(/\uFFFD/g, ' ');
+      setSendData(decodedText);
+    }
+    else {
+      // 从文本转换为十六进制
+      const hexString = Array.from(send_data)
+        .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
+        .join(' ')
+        .toUpperCase();
+      setSendData(hexString);
+    }
+  }
   const scan_serial = async () => {
     await invoke('scan_serial').then((devices) => {
       setSerialList(devices as Array<SerialDevice>);
@@ -269,7 +308,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               <h3 className="serial-debugger__section-title">接收设置</h3>
             </div>
             <div className="checkbox-row">
-              <Checkbox>十六进制显示</Checkbox>
+              <Checkbox checked={hex_show} onChange={(e) => setHexShow(e.target.checked)}>
+                十六进制显示
+              </Checkbox>
             </div>
             <div className="checkbox_withinput-row">
               <Checkbox>自动断帧(ms)</Checkbox>
@@ -288,7 +329,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               <h3 className="serial-debugger__section-title">发送设置</h3>
             </div>
             <div className="checkbox-row">
-              <Checkbox>十六进制发送</Checkbox>
+              <Checkbox checked={hex_send} onChange={hex_send_change}>
+                十六进制发送
+              </Checkbox>
             </div>
             <div className="checkbox_withinput-row">
               <Checkbox>定时发送(s)</Checkbox>
@@ -379,7 +422,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                 <TextArea
                   autoSize={{ minRows: 5, maxRows: 5 }}
                   value={send_data}
-                  onChange={(e) => setSendData(e.target.value)}
+                  onChange={input_change}
                   className="text-area"
                   placeholder="请输入文本..."
                 />
