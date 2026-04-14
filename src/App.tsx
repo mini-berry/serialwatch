@@ -1,8 +1,10 @@
-import React, { useState, useEffect } from 'react';
+import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
+import type { TextAreaRef } from 'antd/es/input/TextArea';
+import type { CheckboxChangeEvent } from 'antd/es/checkbox';
 import { message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -99,6 +101,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const [send_data, setSendData] = useState<string>('');
   const [receive_text, setReceiveText] = useState<string>('');
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
+  const inputRef = useRef<TextAreaRef>(null);
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
     port: '',
     baud: 9600,
@@ -109,8 +112,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     rts_enable: false,
     open_status: false,
   });
-
-  const { TextArea } = Input;
   const formatter: InputNumberProps<number>['formatter'] = (value) => {
     if (value === undefined || value === null) return '0.0';
     const formattedValue = (value / 10).toFixed(1);
@@ -130,20 +131,47 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     }
   }
 
-  const format_hex = (str: string) => {
-    const hexString = str.toUpperCase().replace(/[^0-9A-F]/g, '').replace(/(.{2})/g, '$1 ').trim();
-    return hexString;
-  }
-  const input_change = (e: any) => {
-    if (!hex_send) {
-      setSendData(e.target.value);
+  const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
+    const originalValue = e.target.value;
+    const cursorPosition = e.target.selectionStart;
+
+    const cleanedValue = originalValue
+      .toUpperCase()
+      .replace(/[^0-9A-F]/g, '');
+
+    const formattedValue = cleanedValue.replace(/(.{2})/g, '$1 ').trimEnd();
+
+    // 逻辑：计算光标前的有效字符数量，推算出格式化后的新索引
+    const originalTextBeforeCursor = originalValue.slice(0, cursorPosition);
+    const cleanTextBeforeCursor = originalTextBeforeCursor.toUpperCase().replace(/[^0-9A-F]/g, '');
+
+    let newCursorPos = 0;
+    const charCount = cleanTextBeforeCursor.length;
+
+    if (charCount === 0) {
+      newCursorPos = 0;
+    } else {
+      // 每2个字符多1个空格，所以空格数量是 Math.floor((charCount - 1) / 2)
+      const spaceCount = Math.floor((charCount - 1) / 2);
+      newCursorPos = charCount + spaceCount;
     }
-    else {
-      const inputValue = e.target.value;
-      setSendData(format_hex(inputValue));
-    }
-  }
-  const hex_send_change = (e: any) => {
+
+    // 5. 更新状态
+    setSendData(formattedValue);
+
+    setTimeout(() => {
+      if (inputRef.current) {
+        inputRef.current.resizableTextArea?.textArea.setSelectionRange;
+
+        const finalPos = Math.min(newCursorPos, formattedValue.length);
+        setTimeout(() => {
+          inputRef.current?.resizableTextArea?.textArea.setSelectionRange(finalPos, finalPos);
+        }, 0);
+      }
+    }, 0);
+  };
+
+  const hex_send_change = (e: CheckboxChangeEvent) => {
     setHexSend(e.target.checked);
     if (!e.target.checked) {
       // 从十六进制转换回文本
@@ -162,6 +190,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       setSendData(hexString);
     }
   }
+
   const scan_serial = async () => {
     await invoke('scan_serial').then((devices) => {
       setSerialList(devices as Array<SerialDevice>);
@@ -419,7 +448,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             </div>
             <div className="send-section">
               <div className="text-section">
-                <TextArea
+                <Input.TextArea
+                  ref={inputRef}
                   autoSize={{ minRows: 5, maxRows: 5 }}
                   value={send_data}
                   onChange={input_change}
