@@ -30,6 +30,24 @@ interface SerialDevice {
 }
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
+  const [hex_show, setHexShow] = useState<boolean>(false);
+  const hex_show_ref = useRef(hex_show);
+  const [hex_send, setHexSend] = useState<boolean>(false);
+  const [send_data, setSendData] = useState<string>('');
+  const [receive_text, setReceiveText] = useState<string>('');
+  const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
+  const inputRef = useRef<TextAreaRef>(null);
+  const [serial_config, setSerialConfig] = useState<SerialConfig>({
+    port: '',
+    baud: 9600,
+    data_bits: 8,
+    parity: 'None',
+    stop_bits: 1,
+    dtr_enable: false,
+    rts_enable: false,
+    open_status: false,
+  });
+
   const [messageApi, contextHolder] = message.useMessage();
   useEffect(() => {
     let unlistenDataUpdated: (() => void) | undefined;
@@ -56,7 +74,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
         const data = event.payload as Array<number>;
         const uint8Data = new Uint8Array(data);
-        if (!hex_show) {
+        if (!hex_show_ref.current) {
           const textDecoder = new TextDecoder();
           const decodedText = textDecoder.decode(uint8Data);
           setReceiveText((prev) => prev + decodedText);
@@ -64,9 +82,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         else {
           const hexString = Array.from(uint8Data)
             .map((byte) => byte.toString(16).padStart(2, '0'))
-            .join(' ');
-
-          console.log('Updated hex:', hexString);
+            .join(' ').toUpperCase();
           setReceiveText((prev) => prev + ' ' + hexString);
         }
 
@@ -96,22 +112,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       }
     };
   }, []);
-  const [hex_show, setHexShow] = useState<boolean>(false);
-  const [hex_send, setHexSend] = useState<boolean>(false);
-  const [send_data, setSendData] = useState<string>('');
-  const [receive_text, setReceiveText] = useState<string>('');
-  const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
-  const inputRef = useRef<TextAreaRef>(null);
-  const [serial_config, setSerialConfig] = useState<SerialConfig>({
-    port: '',
-    baud: 9600,
-    data_bits: 8,
-    parity: 'None',
-    stop_bits: 1,
-    dtr_enable: false,
-    rts_enable: false,
-    open_status: false,
-  });
+
   const formatter: InputNumberProps<number>['formatter'] = (value) => {
     if (value === undefined || value === null) return '0.0';
     const formattedValue = (value / 10).toFixed(1);
@@ -132,61 +133,71 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   }
 
   const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    const originalValue = e.target.value;
-    const cursorPosition = e.target.selectionStart;
+    if (hex_send) {
+      const originalValue = e.target.value;
+      const cursorPosition = e.target.selectionStart;
 
-    const cleanedValue = originalValue
-      .toUpperCase()
-      .replace(/[^0-9A-F]/g, '');
+      const cleanedValue = originalValue
+        .toUpperCase()
+        .replace(/[^0-9A-F]/g, '');
 
-    const formattedValue = cleanedValue.replace(/(.{2})/g, '$1 ').trimEnd();
+      const formattedValue = cleanedValue.replace(/(.{2})/g, '$1 ').trimEnd();
 
-    // 逻辑：计算光标前的有效字符数量，推算出格式化后的新索引
-    const originalTextBeforeCursor = originalValue.slice(0, cursorPosition);
-    const cleanTextBeforeCursor = originalTextBeforeCursor.toUpperCase().replace(/[^0-9A-F]/g, '');
+      // 逻辑：计算光标前的有效字符数量，推算出格式化后的新索引
+      const originalTextBeforeCursor = originalValue.slice(0, cursorPosition);
+      const cleanTextBeforeCursor = originalTextBeforeCursor.toUpperCase().replace(/[^0-9A-F]/g, '');
 
-    let newCursorPos = 0;
-    const charCount = cleanTextBeforeCursor.length;
+      let newCursorPos = 0;
+      const charCount = cleanTextBeforeCursor.length;
 
-    if (charCount === 0) {
-      newCursorPos = 0;
-    } else {
-      // 每2个字符多1个空格，所以空格数量是 Math.floor((charCount - 1) / 2)
-      const spaceCount = Math.floor((charCount - 1) / 2);
-      newCursorPos = charCount + spaceCount;
-    }
-
-    // 5. 更新状态
-    setSendData(formattedValue);
-
-    setTimeout(() => {
-      if (inputRef.current) {
-        inputRef.current.resizableTextArea?.textArea.setSelectionRange;
-
-        const finalPos = Math.min(newCursorPos, formattedValue.length);
-        setTimeout(() => {
-          inputRef.current?.resizableTextArea?.textArea.setSelectionRange(finalPos, finalPos);
-        }, 0);
+      if (charCount === 0) {
+        newCursorPos = 0;
+      } else {
+        // 每2个字符多1个空格，所以空格数量是 Math.floor((charCount - 1) / 2)
+        const spaceCount = Math.floor((charCount - 1) / 2);
+        newCursorPos = charCount + spaceCount;
       }
-    }, 0);
+
+      setSendData(formattedValue);
+
+      setTimeout(() => {
+        if (inputRef.current) {
+          inputRef.current.resizableTextArea?.textArea.setSelectionRange;
+
+          const finalPos = Math.min(newCursorPos, formattedValue.length);
+          inputRef.current?.resizableTextArea?.textArea.setSelectionRange(finalPos, finalPos);
+        }
+      }, 0);
+    }
+    else
+      setSendData(e.target.value);
   };
 
   const hex_send_change = (e: CheckboxChangeEvent) => {
     setHexSend(e.target.checked);
     if (!e.target.checked) {
-      // 从十六进制转换回文本
-      const hexString = send_data.replace(/[^0-9A-F]/g, '');
-      const bytes = new Uint8Array(hexString.match(/.{1,2}/g)?.map(byte => parseInt(byte, 16)) || []);
-      const textDecoder = new TextDecoder();
-      const decodedText = textDecoder.decode(bytes).replace(/\uFFFD/g, ' ');
-      setSendData(decodedText);
+      let hexString = send_data.replace(/\s+/g, '');
+      if (hexString.length % 2 !== 0) {
+        hexString = hexString.slice(0, -1) + '0' + hexString.slice(-1);
+      }
+      if (hexString.length === 0) return;
+      const bytes = [];
+      for (let i = 0; i < hexString.length; i += 2) {
+        const byteVal = parseInt(hexString.slice(i, i + 2), 16);
+        // 如果解析失败（如包含非 Hex 字符），填入 0 或跳过
+        bytes.push(isNaN(byteVal) ? 0 : byteVal);
+      }
+      const decoder = new TextDecoder('utf-8', { fatal: false });
+      const uint8Array = new Uint8Array(bytes);
+      let decodedString = decoder.decode(uint8Array);
+      setSendData(decodedString.replace(/\uFFFD/g, ' '));
     }
     else {
-      // 从文本转换为十六进制
-      const hexString = Array.from(send_data)
-        .map((char) => char.charCodeAt(0).toString(16).padStart(2, '0'))
-        .join(' ')
-        .toUpperCase();
+      const encoder = new TextEncoder();
+      const uint8Array = encoder.encode(send_data);
+      const hexString = Array.from(uint8Array)
+        .map((byte) => byte.toString(16).padStart(2, '0').toUpperCase())
+        .join(' ');
       setSendData(hexString);
     }
   }
@@ -206,8 +217,20 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   };
 
   const send_msg = async () => {
-    let data = new TextEncoder().encode(send_data);
-    await invoke('send_msg', { msg: data });
+    if (!hex_send) {
+      let data = new TextEncoder().encode(send_data);
+      await invoke('send_msg', { msg: data });
+    }
+    else {
+      const hexString = send_data.replace(/\s+/g, '');
+      const bytes = [];
+      for (let i = 0; i < hexString.length; i += 2) {
+        const byteVal = parseInt(hexString.slice(i, i + 2), 16);
+        bytes.push(isNaN(byteVal) ? 0 : byteVal);
+      }
+      const uint8Array = new Uint8Array(bytes);
+      await invoke('send_msg', { msg: uint8Array });
+    }
   }
 
   const config_change_flow = async (index: number) => {
@@ -337,7 +360,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               <h3 className="serial-debugger__section-title">接收设置</h3>
             </div>
             <div className="checkbox-row">
-              <Checkbox checked={hex_show} onChange={(e) => setHexShow(e.target.checked)}>
+              <Checkbox checked={hex_show} onChange={(e) => { setHexShow(e.target.checked); hex_show_ref.current = e.target.checked }}>
                 十六进制显示
               </Checkbox>
             </div>
@@ -471,7 +494,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           </div>
         </Splitter.Panel>
       </Splitter>
-    </div>
+    </div >
   );
 };
 
