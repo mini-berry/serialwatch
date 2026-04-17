@@ -14,6 +14,12 @@ interface SerialDebuggerProps {
   // 可以添加props定义
 }
 
+interface OutLine {
+  content: string;
+  color?: string;
+  type: 'send' | 'receive';
+}
+
 interface SerialConfig {
   port: string;
   baud: number;
@@ -30,13 +36,26 @@ interface SerialDevice {
 }
 
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
+  // 颜色选择器
+  const [color, setColor] = useState<string>('#31a9ff');
+  // 接收显示HTML
+  const [receive_text, setReceiveText] = useState<OutLine[]>([]);
+  const [need_scroll, setNeedScroll] = useState<boolean>(false);
+  // 自动断帧
+  const [auto_frame, setAutoFrame] = useState<boolean>(false);
+  // 显示发送字符串
+  const [show_send_message, setShowSendMessage] = useState<boolean>(false);
+  // 十六进制显示
   const [hex_show, setHexShow] = useState<boolean>(false);
   const hex_show_ref = useRef(hex_show);
+  // 十六进制发送
   const [hex_send, setHexSend] = useState<boolean>(false);
+  // 输入文本框
   const [send_data, setSendData] = useState<string>('');
-  const [receive_text, setReceiveText] = useState<string>('');
-  const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
   const inputRef = useRef<TextAreaRef>(null);
+  // 串口列表
+  const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
+  // 串口配置
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
     port: '',
     baud: 9600,
@@ -48,7 +67,21 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     open_status: false,
   });
 
-  const [messageApi, contextHolder] = message.useMessage();
+  useEffect(() => {
+    if (need_scroll) {
+      const showSection = document.getElementById('show-section');
+      if (showSection) {
+        const targetTop = showSection.scrollHeight - showSection.clientHeight;
+        showSection.scrollTo({
+          top: targetTop,
+          behavior: 'instant'
+        });
+      }
+      setNeedScroll(false);
+    }
+  }, [receive_text]);
+
+  const [messageApi, messageHolder] = message.useMessage();
   useEffect(() => {
     let unlistenDataUpdated: (() => void) | undefined;
     let unlistenSerialFailed: (() => void) | undefined;
@@ -74,22 +107,41 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
         const data = event.payload as Array<number>;
         const uint8Data = new Uint8Array(data);
+        const showSection = document.getElementById('show-section');
+        const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
+        setNeedScroll(nowOnBottom);
         if (!hex_show_ref.current) {
           const textDecoder = new TextDecoder();
           const decodedText = textDecoder.decode(uint8Data);
-          setReceiveText((prev) => prev + decodedText);
+          setReceiveText((prev) => {
+            if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              prev[prev.length - 1].content += decodedText;
+              return [...prev];
+            }
+            else if (prev.length > 0) {
+              return [...prev, { content: '> ' + decodedText, type: 'receive' }];
+            }
+            else
+              return [{ content: decodedText, type: 'receive' }];
+          });
+
         }
         else {
           const hexString = Array.from(uint8Data)
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join(' ').toUpperCase();
-          setReceiveText((prev) => prev + ' ' + hexString);
-        }
-
-        if (receive_text.length > 5000) {
-          setReceiveText((prev) => prev.slice(5000));
-        }
+          setReceiveText((prev) => {
+            if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              prev[prev.length - 1].content += hexString;
+              return [...prev];
+            }
+            else {
+              return [...prev, { content: '> ' + hexString, type: 'receive' }];
+            }
+          });
+        };
       });
+
 
       unlistenSerialFailed = await listen('serial-failed', (event) => {
         const errorMessage = event.payload as string;
@@ -119,7 +171,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     return `${formattedValue}`;
   };
   const clean_output = () => {
-    setReceiveText('');
+    setReceiveText([]);
   }
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
@@ -219,6 +271,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const send_msg = async () => {
     if (!hex_send) {
       let data = new TextEncoder().encode(send_data);
+      if (show_send_message && data.length > 0) {
+        send_message_display('\n' + send_data);
+      }
       await invoke('send_msg', { msg: data });
     }
     else {
@@ -229,7 +284,20 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         bytes.push(isNaN(byteVal) ? 0 : byteVal);
       }
       const uint8Array = new Uint8Array(bytes);
+      if (show_send_message) {
+        if (hexString.length % 2 !== 0) {
+          const displayString = '\n' + hexString.slice(0, -1) + '0' + hexString.slice(-1);
+          send_message_display(displayString);
+        }
+      }
       await invoke('send_msg', { msg: uint8Array });
+    }
+  }
+
+  const send_message_display = (msg: string) => {
+    if (serial_config.open_status) {
+      setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
+      setNeedScroll(true);
     }
   }
 
@@ -365,7 +433,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               </Checkbox>
             </div>
             <div className="checkbox_withinput-row">
-              <Checkbox>自动断帧(ms)</Checkbox>
+              <Checkbox checked={auto_frame} onChange={(e) => setAutoFrame(e.target.checked)}>
+                自动断帧(ms)
+              </Checkbox>
               <InputNumber<number>
                 min={1}
                 size="small"
@@ -397,8 +467,12 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               />
             </div>
             <div className="checkbox-row">
-              <Checkbox>显示发送字符串</Checkbox>
+              <Checkbox checked={show_send_message} onChange={(e) => setShowSendMessage(e.target.checked)}>
+                显示发送字符串
+              </Checkbox>
               <ColorPicker
+                value={color}
+                onChange={(color) => setColor(color.toHexString())}
                 style={{ margin: '-10px 0 0 0' }}
                 size="small"
                 format="hex"
@@ -465,9 +539,21 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
         <Splitter.Panel>
           <div className="right-splitter">
-            <div className="show-section">
-              {contextHolder}
-              {receive_text}
+            {messageHolder}
+            <div className="show-section" id="show-section">
+              {receive_text.map((logLine, index) => {
+                return (
+                  <div
+                    key={index}
+                    style={{
+                      color: logLine.color,
+                      wordBreak: 'break-all',
+                    }}
+                  >
+                    {logLine.content}
+                  </div>
+                );
+              })}
             </div>
             <div className="send-section">
               <div className="text-section">

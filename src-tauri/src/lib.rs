@@ -1,11 +1,10 @@
-use serde::{Deserialize, Serialize};
+use serde::Serialize;
 use std::sync::Arc;
 use tauri::async_runtime::Receiver;
 use tauri::State;
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
-use tokio::sync::Mutex;
 use tokio_serial::SerialPortBuilderExt;
 
 mod config;
@@ -22,12 +21,6 @@ struct SerialDevice {
     port: String,
 }
 
-#[derive(Debug, Serialize, Clone, Deserialize)]
-struct StatusState {
-    serial_open_status: bool,
-    receive_count: u64,
-    send_count: u64,
-}
 #[derive(Debug, Clone)]
 struct MsgSenderState {
     sender: Arc<Sender<Vec<u8>>>,
@@ -38,34 +31,20 @@ struct ConfigSenderState {
 }
 #[cfg_attr(mobile, tauri::mobile_entry_point)]
 pub fn run() {
-    let output_state = Mutex::new(StatusState {
-        serial_open_status: false,
-        receive_count: 0,
-        send_count: 0,
-    });
-
-    let output_state = Arc::new(output_state);
-    let output_state_clone = output_state.clone();
-
     let (config_sender, config_receiver) = mpsc::channel::<config::SerialConfig>(1);
     let config_sender = Arc::new(config_sender);
     let config_state = ConfigSenderState {
         sender: config_sender,
     };
 
-    let (msg_sender, msg_receiver) = mpsc::channel::<Vec<u8>>(10);
+    let (msg_sender, msg_receiver) = mpsc::channel::<Vec<u8>>(100);
     let msg_sender = Arc::new(msg_sender);
     let msg_state = MsgSenderState { sender: msg_sender };
 
-    let (data_sender, mut data_receiver) = mpsc::channel::<MsgToFrontend>(10);
+    let (data_sender, mut data_receiver) = mpsc::channel::<MsgToFrontend>(100);
 
     let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(serial_thread(
-        data_sender,
-        msg_receiver,
-        config_receiver,
-        output_state_clone,
-    ));
+    rt.spawn(serial_thread(data_sender, msg_receiver, config_receiver));
 
     tauri::Builder::default()
         .setup(|_app| {
@@ -75,7 +54,6 @@ pub fn run() {
                 match data_receiver.blocking_recv() {
                     Some(MsgToFrontend::DataUpdated(data)) => {
                         #[cfg(debug_assertions)]
-                        println!("Main thread received data: {:?}", data);
                         app_handle.emit("data-updated", data).unwrap_or_else(|err| {
                             eprintln!("Failed to emit event: {err}");
                         });
@@ -90,11 +68,9 @@ pub fn run() {
                     Some(MsgToFrontend::Tips(msg)) => {
                         #[cfg(debug_assertions)]
                         println!("Main thread received a tip: {msg}");
-                        app_handle
-                            .emit("tips", msg)
-                            .unwrap_or_else(|err| {
-                                eprintln!("Failed to emit event: {err}");
-                            });
+                        app_handle.emit("tips", msg).unwrap_or_else(|err| {
+                            eprintln!("Failed to emit event: {err}");
+                        });
                     }
                     None => {
                         #[cfg(debug_assertions)]
@@ -107,14 +83,12 @@ pub fn run() {
             });
             Ok(())
         })
-        .manage(output_state)
         .manage(config_state)
         .manage(msg_state)
         .plugin(tauri_plugin_opener::init())
         .invoke_handler(tauri::generate_handler![
             scan_serial,
             update_config,
-            clean_count,
             send_msg,
         ])
         .run(tauri::generate_context!())
@@ -125,7 +99,6 @@ async fn serial_thread(
     data_sender: Sender<MsgToFrontend>,
     mut msg_receiver: Receiver<Vec<u8>>,
     mut config_receiver: Receiver<config::SerialConfig>,
-    output_state: Arc<Mutex<StatusState>>,
 ) {
     let mut current_config = config::SerialConfig::load().unwrap_or_else(|err| {
         eprintln!("Failed to load config: {err}. Using default config.");
@@ -174,15 +147,15 @@ async fn serial_thread(
 
         match serial_port.as_mut() {
             Some(port) => {
-                let mut buf = vec![0u8; 1024];
+                let mut storage = vec![0u8; 1024];
+                let mut buf = tokio::io::ReadBuf::new(&mut storage);
                 tokio::select! {
-                    serial_result = port.read(&mut buf) => {
+                    serial_result = port.read_buf(&mut buf) => {
                         match serial_result {
                             Ok(n) if n > 0 => {
-                                let received_data = &buf[..n];
-                                output_state.lock().await.receive_count += received_data.len() as u64;
+                                let received_data = &storage [..n];
                                 #[cfg(debug_assertions)]
-                                println!("Received data: {:?}", received_data);
+                                println!("Received msg: {:?}", received_data);
                                 data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|err| {
                                     eprintln!("Failed to send data to main thread: {err}");
                                 });
@@ -206,14 +179,11 @@ async fn serial_thread(
         let data = msg_receiver.try_recv();
         match data {
             Ok(msg) => {
-                #[cfg(debug_assertions)]
-                println!("Received message in serial thread: {msg:?}");
                 if let Some(port) = serial_port.as_mut() {
                     match port.write_all(&msg).await {
                         Ok(()) => {
-                            output_state.lock().await.send_count += msg.len() as u64;
                             #[cfg(debug_assertions)]
-                            println!("Sent data: {:?}", msg);
+                            println!("Sent message: {msg:?}");
                         }
                         Err(e) => {
                             eprintln!("Error writing to serial port: {}", e);
@@ -300,22 +270,9 @@ async fn update_config(
 }
 
 #[tauri::command]
-async fn clean_count(output_state: State<'_, Arc<Mutex<StatusState>>>) -> Result<(), ()> {
-    let mut state = output_state.lock().await;
-    state.receive_count = 0;
-    state.send_count = 0;
-    #[cfg(debug_assertions)]
-    println!("Counts have been reset to zero.");
-    Ok(())
-}
-
-#[tauri::command]
 async fn send_msg(msg: Vec<u8>, sender: State<'_, MsgSenderState>) -> Result<(), ()> {
     match sender.sender.send(msg.clone()).await {
-        Ok(()) => {
-            #[cfg(debug_assertions)]
-            println!("Message received from the frontend successfully: {msg:?}");
-        }
+        Ok(()) => {}
         Err(_) => {
             #[cfg(debug_assertions)]
             println!("Failed to send message");
