@@ -1,6 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Radio } from 'antd';
+import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider } from 'antd';
 import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
@@ -45,6 +45,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const [auto_frame, setAutoFrame] = useState<boolean>(false);
   // 显示发送字符串
   const [show_send_message, setShowSendMessage] = useState<boolean>(false);
+  const show_send_message_ref = useRef(show_send_message);
   // 十六进制显示
   const [hex_show, setHexShow] = useState<boolean>(false);
   const hex_show_ref = useRef(hex_show);
@@ -110,29 +111,39 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         const showSection = document.getElementById('show-section');
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
         setNeedScroll(nowOnBottom);
+        // 关闭十六进制显示
         if (!hex_show_ref.current) {
           const textDecoder = new TextDecoder();
           const decodedText = textDecoder.decode(uint8Data);
           setReceiveText((prev) => {
+            // 如果上一行也是接收数据，则追加到上一行，否则新起一行
             if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
               prev[prev.length - 1].content += decodedText;
               return [...prev];
             }
+            // 如果上一行不是接收数据但存在内容，则新起一行
             else if (prev.length > 0) {
-              return [...prev, { content: '> ' + decodedText, type: 'receive' }];
+              console.log('show_send_message_ref.current', show_send_message_ref.current);
+              if (show_send_message_ref.current)
+                return [...prev, { content: '> ' + decodedText, type: 'receive' }];
+              else
+                return [...prev, { content: decodedText, type: 'receive' }];
             }
+            // 如果没有任何内容，直接添加
             else
               return [{ content: decodedText, type: 'receive' }];
           });
 
         }
+        // 开启十六进制显示
         else {
           const hexString = Array.from(uint8Data)
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join(' ').toUpperCase();
           setReceiveText((prev) => {
+            // 如果上一行也是接收数据，则追加到上一行，否则新起一行
             if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-              prev[prev.length - 1].content += hexString;
+              prev[prev.length - 1].content += ' ' + hexString;
               return [...prev];
             }
             else {
@@ -301,16 +312,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     }
   }
 
-  const config_change_flow = async (index: number) => {
-    const key = index === 0 ? 'dtr_enable' : 'rts_enable';
-    const nextConfig = {
-      ...serial_config,
-      [key]: !serial_config[key],
-    };
-    setSerialConfig(nextConfig);
-    await invoke('update_config', { newConfig: nextConfig });
-  };
-
   return (
     <div className="main-container">
       <Splitter className="splitter">
@@ -401,21 +402,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               />
             </div>
 
-            <div className="button-row">
-              <Radio.Group style={{ marginLeft: '10px' }} size="small" buttonStyle="solid">
-                <Radio.Button value="RI">RI</Radio.Button>
-                <Radio.Button value="RI">DSR</Radio.Button>
-                <Radio.Button value="RI">CTS</Radio.Button>
-              </Radio.Group>
-
-              <Button className="little-button" type={serial_config.dtr_enable ? 'primary' : 'default'} size="small" onClick={() => config_change_flow(0)}>
-                <p>DTR</p>
-              </Button>
-              <Button className="little-button" type={serial_config.rts_enable ? 'primary' : 'default'} style={{ marginRight: '10px' }} size="small" onClick={() => config_change_flow(1)}>
-                <p>RTS</p>
-              </Button>
-            </div>
-
             <div className="open-row">
               <Button className="open-button" color={serial_config.open_status ? 'red' : 'blue'} variant="solid" onClick={open_serial}>
                 {serial_config.open_status ? '关闭' : '打开'}
@@ -467,7 +453,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               />
             </div>
             <div className="checkbox-row">
-              <Checkbox checked={show_send_message} onChange={(e) => setShowSendMessage(e.target.checked)}>
+              <Checkbox checked={show_send_message} onChange={(e) => { setShowSendMessage(e.target.checked); show_send_message_ref.current = e.target.checked }}>
                 显示发送字符串
               </Checkbox>
               <ColorPicker
