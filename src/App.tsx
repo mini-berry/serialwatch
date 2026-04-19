@@ -47,11 +47,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   // 自动断帧
   const [auto_frame, setAutoFrame] = useState<boolean>(false);
   // 显示发送字符串
-  const [show_send_message, setShowSendMessage] = useState<boolean>(false);
-  const show_send_message_ref = useRef(show_send_message);
+  const show_send_message_ref = useRef(false);
   // 十六进制显示
-  const [hex_show, setHexShow] = useState<boolean>(false);
-  const hex_show_ref = useRef(hex_show);
+  const hex_show_ref = useRef(false);
   // 十六进制发送
   const [hex_send, setHexSend] = useState<boolean>(false);
   // 输入文本框
@@ -287,7 +285,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const send_msg = async () => {
     if (!hex_send) {
       let data = new TextEncoder().encode(send_data);
-      if (show_send_message && data.length > 0) {
+      if (show_send_message_ref.current && data.length > 0) {
         send_message_display('\n' + send_data);
       }
       if (serial_config.open_status)
@@ -302,9 +300,13 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         bytes.push(isNaN(byteVal) ? 0 : byteVal);
       }
       const uint8Array = new Uint8Array(bytes);
-      if (show_send_message) {
+      if (show_send_message_ref.current) {
         if (hexString.length % 2 !== 0) {
-          const displayString = '\n' + hexString.slice(0, -1) + '0' + hexString.slice(-1);
+          const displayString = '\n' + send_data.slice(0, -1) + '0' + send_data.slice(-1);
+          send_message_display(displayString);
+        }
+        else {
+          const displayString = '\n' + send_data;
           send_message_display(displayString);
         }
       }
@@ -423,7 +425,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               <h3 className="serial-debugger__section-title">接收设置</h3>
             </div>
             <div className="checkbox-row">
-              <Checkbox checked={hex_show} onChange={(e) => { setHexShow(e.target.checked); hex_show_ref.current = e.target.checked }}>
+              <Checkbox onChange={(e) => { hex_show_ref.current = e.target.checked }}>
                 十六进制显示
               </Checkbox>
             </div>
@@ -462,7 +464,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               />
             </div>
             <div className="checkbox-row">
-              <Checkbox checked={show_send_message} onChange={(e) => { setShowSendMessage(e.target.checked); show_send_message_ref.current = e.target.checked }}>
+              <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
                 显示发送字符串
               </Checkbox>
               <ColorPicker
