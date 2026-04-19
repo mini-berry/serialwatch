@@ -233,6 +233,7 @@ body {
   right: 0;
   height: 20px;
   white-space: nowrap;
+  padding-right: 10px;
 }
 
 .text-area {

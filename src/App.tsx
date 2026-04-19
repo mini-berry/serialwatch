@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider } from 'antd';
-import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined } from '@ant-design/icons';
+import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
@@ -38,6 +38,9 @@ interface SerialDevice {
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   // 颜色选择器
   const [color, setColor] = useState<string>('#31a9ff');
+  // 发送接收计数
+  const [receive_count, setReceiveCount] = useState<number>(0);
+  const [send_count, setSendCount] = useState<number>(0);
   // 接收显示HTML
   const [receive_text, setReceiveText] = useState<OutLine[]>([]);
   const [need_scroll, setNeedScroll] = useState<boolean>(false);
@@ -111,6 +114,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         const showSection = document.getElementById('show-section');
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
         setNeedScroll(nowOnBottom);
+        setReceiveCount((prev) => prev + uint8Data.length);
         // 关闭十六进制显示
         if (!hex_show_ref.current) {
           const textDecoder = new TextDecoder();
@@ -123,7 +127,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             }
             // 如果上一行不是接收数据但存在内容，则新起一行
             else if (prev.length > 0) {
-              console.log('show_send_message_ref.current', show_send_message_ref.current);
               if (show_send_message_ref.current)
                 return [...prev, { content: '> ' + decodedText, type: 'receive' }];
               else
@@ -183,6 +186,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   };
   const clean_output = () => {
     setReceiveText([]);
+    setReceiveCount(0);
+    setSendCount(0);
   }
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
@@ -285,6 +290,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       if (show_send_message && data.length > 0) {
         send_message_display('\n' + send_data);
       }
+      if (serial_config.open_status)
+        setSendCount((prev) => prev + data.length);
       await invoke('send_msg', { msg: data });
     }
     else {
@@ -301,6 +308,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           send_message_display(displayString);
         }
       }
+      if (serial_config.open_status)
+        setSendCount((prev) => prev + uint8Array.length);
       await invoke('send_msg', { msg: uint8Array });
     }
   }
@@ -561,7 +570,11 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               </div>
             </div>
             <div className="log-section">
-              发送0条，接收0条
+              <UpOutlined />
+              &nbsp;发送:{send_count}
+              &nbsp;&nbsp;|
+              &nbsp;<DownOutlined />
+              &nbsp;接收:{receive_count}
             </div>
           </div>
         </Splitter.Panel>
