@@ -62,22 +62,22 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
   // 定时发送
   const [timerRunning, setTimerRunning] = useState(false); // 控制定时器状态
-  const timerRef: React.RefObject<null | number> = useRef(null);
+  const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
+  const sendMsgRef = useRef<() => Promise<void> | void>(() => undefined);
   useEffect(() => {
-    // 1. 如果定时器正在运行，则启动 setInterval
     if (timerRunning) {
       timerRef.current = setInterval(() => {
-        send_msg();
+        void sendMsgRef.current();
       }, timerInterval);
     }
     return () => {
       if (timerRef.current) {
-        clearInterval(timerRef.current); // 清除定时器，防止内存泄漏
+        clearInterval(timerRef.current);
         timerRef.current = null;
       }
     };
-  }, [timerRunning, timerInterval, send_data, hex_send]);
+  }, [timerRunning, timerInterval]);
 
   // 串口配置
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
@@ -141,25 +141,17 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
           const textDecoder = new TextDecoder();
           const decodedText = textDecoder.decode(uint8Data);
           setReceiveText((prev) => {
-            // 自动断帧
             if (auto_frame_ref.current && frame_break) {
-              if (show_send_message_ref.current)
-                return [...prev, { content: '> ' + decodedText, type: 'receive' }];
-              return [...prev, { content: decodedText, type: 'receive' }];
+              return appendReceiveLine(prev, decodedText, {
+                prefixSendTag: show_send_message_ref.current,
+              });
             }
-            // 如果上一行也是接收数据，则追加到上一行，否则新起一行
             if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-              prev[prev.length - 1].content += decodedText;
-              return [...prev];
+              return appendReceiveLine(prev, decodedText, { mergePrevious: true });
             }
-            // 如果上一行不是接收数据但存在内容，则新起一行
-            if (prev.length > 0) {
-              if (show_send_message_ref.current)
-                return [...prev, { content: '> ' + decodedText, type: 'receive' }];
-              return [...prev, { content: decodedText, type: 'receive' }];
-            }
-            // 如果没有任何内容，直接添加
-            return [{ content: decodedText, type: 'receive' }];
+            return appendReceiveLine(prev, decodedText, {
+              prefixSendTag: show_send_message_ref.current,
+            });
           });
         }
         // 开启十六进制显示
@@ -168,21 +160,18 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join(' ').toUpperCase();
           setReceiveText((prev) => {
-            // 自动断帧
             if (auto_frame_ref.current && frame_break) {
-              console.log('自动断帧，距离上次接收已超过设定时间');
-              if (show_send_message_ref.current)
-                return [...prev, { content: '> ' + hexString, type: 'receive' }];
-              return [...prev, { content: hexString, type: 'receive' }];
+              return appendReceiveLine(prev, hexString, {
+                prefixSendTag: show_send_message_ref.current,
+              });
             }
-            // 如果上一行也是接收数据，则追加到上一行，否则新起一行
             if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-              prev[prev.length - 1].content += ' ' + hexString;
-              return [...prev];
+              return appendReceiveLine(prev, hexString, {
+                mergePrevious: true,
+                separator: ' ',
+              });
             }
-            else {
-              return [...prev, { content: '> ' + hexString, type: 'receive' }];
-            }
+            return appendReceiveLine(prev, hexString, { prefixSendTag: true });
           });
         };
         if (auto_frame_ref.current) {
@@ -222,6 +211,38 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     setReceiveCount(0);
     setSendCount(0);
   }
+
+  const appendReceiveLine = (
+    prev: OutLine[],
+    content: string,
+    options?: {
+      mergePrevious?: boolean;
+      separator?: string;
+      prefixSendTag?: boolean;
+    }
+  ): OutLine[] => {
+    const { mergePrevious = false, separator = '', prefixSendTag = false } = options ?? {};
+
+    if (mergePrevious && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+      const lastLine = prev[prev.length - 1];
+      return [
+        ...prev.slice(0, -1),
+        {
+          ...lastLine,
+          content: lastLine.content + separator + content,
+        },
+      ];
+    }
+
+    return [
+      ...prev,
+      {
+        content: `${prefixSendTag ? '> ' : ''}${content}`,
+        type: 'receive' as const,
+      },
+    ];
+  };
+
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
       const nextConfig = {
@@ -276,7 +297,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
   const hex_send_change = (e: CheckboxChangeEvent) => {
     setHexSend(e.target.checked);
-    console.log('hex_send:', hex_send);
     if (!e.target.checked) {
       let hexString = send_data.replace(/\s+/g, '');
       if (hexString.length % 2 !== 0) {
@@ -322,7 +342,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     if (!serial_config.open_status || send_data.length === 0) {
       return;
     }
-    console.log('原始发送字符串:', hex_send);
     if (!hex_send) {
       let data = new TextEncoder().encode(send_data);
       if (show_send_message_ref.current && data.length > 0) {
@@ -344,12 +363,10 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
 
         if (hexString.length % 2 !== 0) {
           const displayString = (send_data.slice(0, -1) + '0' + send_data.slice(-1));
-          console.log('调整后原始字符串:', displayString);
           send_message_display(displayString);
         }
         else {
           const displayString = send_data;
-          console.log('显示发送字符串:', displayString);
           send_message_display(displayString);
         }
       }
@@ -358,6 +375,10 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       await invoke('send_msg', { msg: uint8Array });
     }
   }
+
+  useEffect(() => {
+    sendMsgRef.current = send_msg;
+  }, [send_msg]);
 
   const send_message_display = (msg: string) => {
     if (serial_config.open_status) {
