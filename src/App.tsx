@@ -402,7 +402,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                   label: `${device.port}-${device.name}`,
                 }))}
                 onChange={(value) => config_change('port', value)}
-                onActive={scan_serial}
+                onOpenChange={scan_serial}
               />
             </div>
 
