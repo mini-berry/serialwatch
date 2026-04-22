@@ -335,7 +335,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       [key]: value,
     };
     setSerialConfig(nextConfig);
-    await invoke('update_config', { newConfig: nextConfig });
+    if (serial_config.open_status)
+      await invoke('update_config', { newConfig: nextConfig });
   };
 
   const send_msg = async () => {
