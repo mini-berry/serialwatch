@@ -26,8 +26,7 @@ interface SerialConfig {
   data_bits: number;
   parity: 'None' | 'Odd' | 'Even';
   stop_bits: number;
-  dtr_enable: boolean;
-  rts_enable: boolean;
+  flow_control: 'None' | 'RtsCts' | 'XonXoff';
   open_status: boolean;
 }
 interface SerialDevice {
@@ -86,8 +85,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     data_bits: 8,
     parity: 'None',
     stop_bits: 1,
-    dtr_enable: false,
-    rts_enable: false,
+    flow_control: 'None',
     open_status: false,
   });
 

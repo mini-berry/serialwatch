@@ -330,5 +330,10 @@ impl Config for tokio_serial::SerialPortBuilder {
                 config::CheckBit::Even => tokio_serial::Parity::Even,
                 config::CheckBit::None => tokio_serial::Parity::None,
             })
+            .flow_control(match config.flow_control {
+                config::FlowControl::None => tokio_serial::FlowControl::None,
+                config::FlowControl::RtsCts => tokio_serial::FlowControl::Hardware,
+                config::FlowControl::XonXoff => tokio_serial::FlowControl::Software,
+            })
     }
 }

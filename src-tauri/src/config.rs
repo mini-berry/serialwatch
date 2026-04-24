@@ -1,6 +1,12 @@
 use serde::{Deserialize, Serialize};
 use std::fs;
 use std::path::PathBuf;
+#[derive(Debug, Serialize, Clone, Deserialize, PartialEq)]
+pub enum FlowControl {
+    None,
+    RtsCts,
+    XonXoff,
+}
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
 pub struct SerialConfig {
@@ -9,21 +15,12 @@ pub struct SerialConfig {
     pub stop_bits: u8,
     pub parity: CheckBit,
     pub baud: u32,
-    pub dtr_enable: bool,
-    pub rts_enable: bool,
+    pub flow_control: FlowControl,
     pub open_status: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SaveConfig {
-    pub port: String,
-    pub data_bits: u8,
-    pub stop_bits: u8,
-    pub parity: CheckBit,
-    pub baud: u32,
-    pub dtr_enable: bool,
-    pub rts_enable: bool,
-}
+pub struct SaveConfig {}
 
 impl PartialEq for SerialConfig {
     fn eq(&self, other: &Self) -> bool {
@@ -32,8 +29,7 @@ impl PartialEq for SerialConfig {
             && self.stop_bits == other.stop_bits
             && self.parity == other.parity
             && self.baud == other.baud
-            && self.dtr_enable == other.dtr_enable
-            && self.rts_enable == other.rts_enable
+            && self.flow_control == other.flow_control
     }
 }
 
@@ -51,8 +47,7 @@ impl Default for SerialConfig {
             stop_bits: 1,
             data_bits: 8,
             parity: CheckBit::None,
-            dtr_enable: false,
-            rts_enable: false,
+            flow_control: FlowControl::None,
             port: String::new(),
             open_status: false,
         }
@@ -109,13 +104,6 @@ impl SerialConfig {
         let config_path = Self::get_config_path()?;
 
         let save_config = SaveConfig {
-            port: self.port.clone(),
-            data_bits: self.data_bits,
-            stop_bits: self.stop_bits,
-            parity: self.parity.clone(),
-            baud: self.baud,
-            dtr_enable: self.dtr_enable,
-            rts_enable: self.rts_enable,
         };
         // 序列化为 TOML 格式
         let toml_content = toml::to_string_pretty(&save_config)
