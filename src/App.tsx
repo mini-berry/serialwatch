@@ -204,11 +204,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     const formattedValue = (value / 10).toFixed(1);
     return `${formattedValue}`;
   };
-  const clean_output = () => {
-    setReceiveText([]);
-    setReceiveCount(0);
-    setSendCount(0);
-  }
 
   const appendReceiveLine = (
     prev: OutLine[],
@@ -241,6 +236,19 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     ];
   };
 
+  const send_message_display = (msg: string) => {
+    if (serial_config.open_status) {
+      setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
+      setNeedScroll(true);
+    }
+  };
+
+  const clean_output = () => {
+    setReceiveText([]);
+    setReceiveCount(0);
+    setSendCount(0);
+  };
+
   const open_serial = async () => {
     if (serial_list.some(device => device.port === serial_config.port)) {
       const nextConfig = {
@@ -250,7 +258,23 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       setSerialConfig(nextConfig);
       await invoke('update_config', { newConfig: nextConfig });
     }
-  }
+  };
+
+  const scan_serial = async () => {
+    await invoke('scan_serial').then((devices) => {
+      setSerialList(devices as Array<SerialDevice>);
+    });
+  };
+
+  const config_change = async <K extends keyof SerialConfig>(key: K, value: SerialConfig[K]) => {
+    const nextConfig = {
+      ...serial_config,
+      [key]: value,
+    };
+    setSerialConfig(nextConfig);
+    if (serial_config.open_status)
+      await invoke('update_config', { newConfig: nextConfig });
+  };
 
   const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
     if (hex_send) {
@@ -320,21 +344,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         .join(' ');
       setSendData(hexString);
     }
-  }
-
-  const scan_serial = async () => {
-    await invoke('scan_serial').then((devices) => {
-      setSerialList(devices as Array<SerialDevice>);
-    });
-  }
-  const config_change = async <K extends keyof SerialConfig>(key: K, value: SerialConfig[K]) => {
-    const nextConfig = {
-      ...serial_config,
-      [key]: value,
-    };
-    setSerialConfig(nextConfig);
-    if (serial_config.open_status)
-      await invoke('update_config', { newConfig: nextConfig });
   };
 
   const send_msg = async () => {
@@ -373,18 +382,11 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         setSendCount((prev) => prev + uint8Array.length);
       await invoke('send_msg', { msg: uint8Array });
     }
-  }
+  };
 
   useEffect(() => {
     sendMsgRef.current = send_msg;
   }, [send_msg]);
-
-  const send_message_display = (msg: string) => {
-    if (serial_config.open_status) {
-      setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
-      setNeedScroll(true);
-    }
-  }
 
   return (
     <div className="main-container">
