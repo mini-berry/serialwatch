@@ -1,10 +1,12 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider } from 'antd';
-import { ShrinkOutlined, ToTopOutlined, ClearOutlined, SettingOutlined, UpOutlined, DownOutlined } from '@ant-design/icons';
+import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown } from 'antd';
+import { ToTopOutlined, ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
+import type { MenuProps } from 'antd';
+import type { MenuInfo } from '@rc-component/menu/lib/interface';
 import { message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
@@ -102,7 +104,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       setNeedScroll(false);
     }
   }, [receive_text]);
-
   const [messageApi, messageHolder] = message.useMessage();
   useEffect(() => {
     let unlistenDataUpdated: (() => void) | undefined;
@@ -388,10 +389,114 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     sendMsgRef.current = send_msg;
   }, [send_msg]);
 
+  const [secMenuOpen, setSecMenuOpen] = useState(false);
+  const [selectedText, setSelectedText] = useState<string>('');
+  const [selectedBool, setSelectedBool] = useState(false);
+  const copySelectedText = async () => {
+    if (selectedText.length > 0) {
+      await navigator.clipboard.writeText(selectedText);
+    }
+  }
+
+  const copyAllText = async () => {
+    const allText = receive_text.map(line => line.content).join('\n');
+    if (allText.length > 0) {
+      await navigator.clipboard.writeText(allText);
+    }
+  }
+
+  const copyLineText = async (line: number) => {
+    const lineContent = receive_text[line]?.content || '';
+    if (lineContent.length > 0) {
+      await navigator.clipboard.writeText(lineContent);
+    }
+  }
+
+  const [leftPanelCollapsed, setLeftPanelCollapsed] = useState(false);
+
+  const collapseHandler = (collapsed: boolean[], _sizes: number[]) => {
+    setLeftPanelCollapsed(Boolean(collapsed[0]));
+  }
+
+  const copyToSendArea = () => {
+    if (selectedText.length > 3) {
+      let textToCopy = selectedText.trim();
+      const regex = /^[0-9A-F]{2}(?: [0-9A-F]{2})*$/;
+      setHexSend(regex.test(textToCopy));
+      setSendData(textToCopy);
+    }
+    else
+      setSendData(selectedText);
+  }
+
+  const secMenu: MenuProps['items'] = [{
+    key: 'clear',
+    label: '清空',
+    icon: <ClearOutlined />,
+    onClick: clean_output
+  },
+  {
+    type: 'divider',
+  }, {
+    key: 'copy_all',
+    label: '复制全部',
+    icon: <CopyOutlined />,
+    onClick: copyAllText,
+  },
+  ];
+
+  const handleMenuClick = (info: MenuInfo, index: number) => {
+    if (info.key === 'copy') {
+      copySelectedText();
+    }
+    else if (info.key === 'copy_to') {
+      copyToSendArea();
+    }
+    else if (info.key === 'copy_line') {
+      copyLineText(index);
+    }
+    else if (info.key === 'clear') {
+      clean_output();
+    }
+    else if (info.key === 'copy_all') {
+      copyAllText();
+    }
+  };
+  const logMenu: MenuProps['items'] = [{
+    key: 'copy',
+    label: '复制',
+    icon: <CopyOutlined />,
+    disabled: !selectedBool,
+  },
+  {
+    key: 'copy_to',
+    label: '复制到发送栏',
+    icon: <CopyOutlined />,
+    disabled: !selectedBool
+  },
+  {
+    key: 'copy_line',
+    label: '复制本行',
+    icon: <CopyOutlined />
+  },
+  {
+    key: 'copy_all',
+    label: '复制全部',
+    icon: <CopyOutlined />,
+  },
+  {
+    type: 'divider',
+  },
+  {
+    key: 'clear',
+    label: '清空',
+    icon: <ClearOutlined />,
+  },
+  ];
   return (
-    <div className="main-container">
-      <Splitter className="splitter">
-        <Splitter.Panel className="left-splitter" min={200} defaultSize={200}>
+    <div className="main-container" >
+      <Splitter className="splitter" onCollapse={collapseHandler}>
+        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible >
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
@@ -582,15 +687,12 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                 ]}
               />
             </div>
-            <div className="checkbox-row">
+            {/* <div className="checkbox-row">
               <Checkbox>自动重连</Checkbox>
-            </div>
+            </div> */}
             <div style={{ height: "30px" }}></div>
           </div>
           <div className="bottom-bar">
-            <div className='inner-icon'>
-              <ShrinkOutlined className='icon shrink-icon' />
-            </div>
             <div className='inner-icon'>
               <ToTopOutlined className='icon to-top-icon' />
             </div>
@@ -606,21 +708,32 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
         <Splitter.Panel>
           <div className="right-splitter">
             {messageHolder}
-            <div className="show-section" id="show-section">
-              {receive_text.map((logLine, index) => {
-                return (
-                  <div
-                    key={index}
-                    style={{
-                      color: logLine.color,
-                      wordBreak: 'break-all',
-                    }}
-                  >
-                    {logLine.content}
-                  </div>
-                );
-              })}
-            </div>
+            <Dropdown menu={{ items: secMenu }} trigger={['contextMenu']} open={secMenuOpen} onOpenChange={(open) => setSecMenuOpen(open)}>
+              <div className="show-section" id="show-section">
+                {receive_text.map((logLine, index) => {
+                  return (
+                    <Dropdown key={index} menu={{ items: logMenu, onClick: (e) => handleMenuClick(e, index) }} trigger={['contextMenu']}>
+                      <div
+                        key={index}
+                        style={{
+                          color: logLine.color,
+                          wordBreak: 'break-all'
+                        }}
+                        onContextMenu={(e) => {
+                          e.stopPropagation(); setSecMenuOpen(false);
+                          let selection = window.getSelection()?.toString() || '';
+                          setSelectedText(selection);
+                          setSelectedBool(selection.length > 0);
+                        }
+                        }
+                      >
+                        {logLine.content}
+                      </div>
+                    </Dropdown>
+                  );
+                })}
+              </div>
+            </Dropdown>
             <div className="send-section">
               <div className="text-section">
                 <Input.TextArea
@@ -648,8 +761,8 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               &nbsp;接收:{receive_count}
             </div>
           </div>
-        </Splitter.Panel>
-      </Splitter>
+        </Splitter.Panel >
+      </Splitter >
     </div >
   );
 };
