@@ -100,16 +100,6 @@ async fn serial_thread(
     mut msg_receiver: Receiver<Vec<u8>>,
     mut config_receiver: Receiver<config::SerialConfig>,
 ) {
-    let mut current_config = config::SerialConfig::load().unwrap_or_else(|err| {
-        eprintln!("Failed to load config: {err}. Using default config.");
-        config::SerialConfig::default()
-            .save()
-            .unwrap_or_else(|err| {
-                eprintln!("Failed to save default config: {err}");
-            });
-        config::SerialConfig::default()
-    });
-
     let mut serial_port = None;
 
     loop {
@@ -125,12 +115,12 @@ async fn serial_thread(
                         tokio_serial::new(new_config.port.clone(), new_config.baud)
                             .change_config(&new_config),
                     );
-                    // 更新当前配置并保存
-                    current_config.update(new_config).unwrap_or_else(|err| {
-                        eprintln!("Failed to save config: {err}");
-                    });
-                    // 打开，自动drop；未打开，直接打开
+                    if let Some(port) = serial_port.take() {
+                        drop(port);
+                    }
+                    tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     serial_port = serial_builder.unwrap().open_native_async().ok();
+                    println!("{:?}", serial_port);
                 }
                 // 关闭串口
                 else {

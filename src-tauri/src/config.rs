@@ -56,6 +56,7 @@ impl Default for SerialConfig {
 
 impl SerialConfig {
     // 获取配置文件路径（跨平台）
+    #[allow(dead_code)]
     pub fn get_config_path() -> Result<PathBuf, String> {
         let mut config_path = if cfg!(target_os = "windows") {
             // Windows: 使用 AppData/Roaming
@@ -79,6 +80,7 @@ impl SerialConfig {
     }
 
     // 加载配置文件
+    #[allow(dead_code)]
     pub fn load() -> Result<Self, String> {
         let config_path = Self::get_config_path()?;
 
@@ -100,6 +102,7 @@ impl SerialConfig {
     }
 
     // 保存配置文件
+    #[allow(dead_code)]
     pub fn save(&self) -> Result<(), String> {
         let config_path = Self::get_config_path()?;
 
@@ -116,6 +119,7 @@ impl SerialConfig {
     }
 
     // 更新配置
+    #[allow(dead_code)]
     pub fn update(&mut self, config: SerialConfig) -> Result<(), String> {
         if *self != config {
             *self = config;

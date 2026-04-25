@@ -1,7 +1,7 @@
 import React, { useState, useEffect, useRef } from 'react';
 import './App.css';
-import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown } from 'antd';
-import { ToTopOutlined, ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined } from '@ant-design/icons';
+import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown, Radio } from 'antd';
+import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
@@ -39,6 +39,7 @@ interface SerialDevice {
 const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   // 颜色选择器
   const [color, setColor] = useState<string>('#31a9ff');
+  const [flow_control, setFlowControl] = useState<SerialConfig['flow_control']>('None');
   // 发送接收计数
   const [receive_count, setReceiveCount] = useState<number>(0);
   const [send_count, setSendCount] = useState<number>(0);
@@ -496,7 +497,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div className="main-container" >
       <Splitter className="splitter" onCollapse={collapseHandler}>
-        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible >
+        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
@@ -581,6 +582,13 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
                   { value: 2, label: '2' },
                 ]}
               />
+            </div>
+            <div className="button-row">
+              <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
+                <Radio.Button value="None" >关闭</Radio.Button>
+                <Radio.Button value="RtsCts" >硬件</Radio.Button>
+                <Radio.Button value="XonXoff" >软件</Radio.Button>
+              </Radio.Group>
             </div>
 
             <div className="open-row">
@@ -693,9 +701,6 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             <div style={{ height: "30px" }}></div>
           </div>
           <div className="bottom-bar">
-            <div className='inner-icon'>
-              <ToTopOutlined className='icon to-top-icon' />
-            </div>
             <div className='inner-icon' onClick={clean_output}>
               <ClearOutlined className='icon clear-icon' />
             </div>
