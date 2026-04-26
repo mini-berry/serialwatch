@@ -106,8 +106,7 @@ impl SerialConfig {
     pub fn save(&self) -> Result<(), String> {
         let config_path = Self::get_config_path()?;
 
-        let save_config = SaveConfig {
-        };
+        let save_config = SaveConfig {};
         // 序列化为 TOML 格式
         let toml_content = toml::to_string_pretty(&save_config)
             .map_err(|_| "Failed to serialize config to TOML")?;

@@ -60,7 +60,7 @@ pub fn run() {
                     }
                     Some(MsgToFrontend::SerialFailed(err)) => {
                         #[cfg(debug_assertions)]
-                        println!("Main thread received serial error: {err}");
+                        eprintln!("Main thread received serial error: {err}");
                         app_handle.emit("serial-failed", err).unwrap_or_else(|err| {
                             eprintln!("Failed to emit event: {err}");
                         });
@@ -74,7 +74,7 @@ pub fn run() {
                     }
                     None => {
                         #[cfg(debug_assertions)]
-                        println!(
+                        eprintln!(
                             "Data sender has been disconnected. Exiting data receiver thread."
                         );
                         break;
@@ -120,7 +120,6 @@ async fn serial_thread(
                     }
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     serial_port = serial_builder.unwrap().open_native_async().ok();
-                    println!("{:?}", serial_port);
                 }
                 // 关闭串口
                 else {
@@ -130,7 +129,7 @@ async fn serial_thread(
             Err(mpsc::error::TryRecvError::Empty) => {}
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
-                println!("Config sender has been disconnected. Exiting serial thread.");
+                eprintln!("Config sender has been disconnected. Exiting serial thread.");
                 break;
             }
         }
@@ -182,18 +181,27 @@ async fn serial_thread(
                     }
                 } else {
                     #[cfg(debug_assertions)]
-                    println!("Serial port is not open. Cannot send data.");
+                    eprintln!("Serial port is not open. Cannot send data.");
+                    data_sender
+                        .send(MsgToFrontend::SerialFailed(
+                            "串口未打开，无法发送数据".to_string(),
+                        ))
+                        .await
+                        .unwrap_or_else(|err| {
+                            eprintln!("Failed to send error to main thread: {err}");
+                        });
                 }
             }
             Err(mpsc::error::TryRecvError::Empty) => {}
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
-                println!("Sender has been disconnected. Exiting serial thread.");
+                eprintln!("Sender has been disconnected. Exiting serial thread.");
                 break;
             }
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
+    eprintln!("Serial thread exiting.");
 }
 #[tauri::command]
 async fn scan_serial() -> Vec<SerialDevice> {
@@ -253,7 +261,7 @@ async fn update_config(
         }
         Err(_) => {
             #[cfg(debug_assertions)]
-            println!("Failed to send config");
+            eprintln!("Failed to send config");
         }
     }
     Ok(())
@@ -265,7 +273,7 @@ async fn send_msg(msg: Vec<u8>, sender: State<'_, MsgSenderState>) -> Result<(),
         Ok(()) => {}
         Err(_) => {
             #[cfg(debug_assertions)]
-            println!("Failed to send message");
+            eprintln!("Failed to send message");
         }
     }
     Ok(())
@@ -296,7 +304,7 @@ impl Config for tokio_serial::SerialPortBuilder {
                 8 => tokio_serial::DataBits::Eight,
                 _ => {
                     #[cfg(debug_assertions)]
-                    println!(
+                    eprintln!(
                         "Invalid data_bits: {}. Defaulting to 8 data bits.",
                         config.data_bits
                     );
@@ -308,7 +316,7 @@ impl Config for tokio_serial::SerialPortBuilder {
                 2 => tokio_serial::StopBits::Two,
                 _ => {
                     #[cfg(debug_assertions)]
-                    println!(
+                    eprintln!(
                         "Invalid stop_bits: {}. Defaulting to 1 stop bit.",
                         config.stop_bits
                     );

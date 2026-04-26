@@ -48,7 +48,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const [need_scroll, setNeedScroll] = useState<boolean>(false);
   // 自动断帧
   const last_receive_time_ref = useRef<number>(0);
-  const auto_frame_ref = useRef(false);
+  const auto_frame_ref = useRef(true);
   const auto_frame_time_ref = useRef(10);
   // 显示发送字符串
   const show_send_message_ref = useRef(false);
@@ -111,19 +111,40 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
     let unlistenSerialFailed: (() => void) | undefined;
     // let unlistenSerialError: (() => void) | undefined;
 
+    const savedConfigString = localStorage.getItem('serialConfig');
+
+    if (savedConfigString) {
+      try {
+        // 在 try 块中执行可能出错的操作
+        let savedConfig = JSON.parse(savedConfigString) as SerialConfig;
+        savedConfig.open_status = false;
+        setSerialConfig(savedConfig);
+      } catch (error) {
+        console.error('解析本地配置时出错:', error);
+      }
+    }
+
     invoke('scan_serial').then((devices) => {
       let deviceList = devices as Array<SerialDevice>;
       setSerialList(deviceList);
 
       if (deviceList.length > 0) {
-        setSerialConfig((prevConfig) => {
-          const nextConfig: SerialConfig = {
-            ...prevConfig,
-            port: deviceList[0].port,
-          };
-          invoke('update_config', { newConfig: nextConfig });
-          return nextConfig;
-        });
+        if (deviceList.every(device => device.port !== serial_config.port)) {
+          setSerialConfig((prevConfig) => {
+            const nextConfig: SerialConfig = {
+              ...prevConfig,
+              port: deviceList[0].port,
+            };
+            invoke('update_config', { newConfig: nextConfig });
+            return nextConfig;
+          });
+        }
+      }
+      else {
+        setSerialConfig((prevConfig) => ({
+          ...prevConfig,
+          port: '',
+        }));
       }
     });
 
@@ -273,6 +294,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
       ...serial_config,
       [key]: value,
     };
+    localStorage.setItem('serialConfig', JSON.stringify(nextConfig));
     setSerialConfig(nextConfig);
     if (serial_config.open_status)
       await invoke('update_config', { newConfig: nextConfig });
@@ -497,7 +519,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div className="main-container" >
       <Splitter className="splitter" onCollapse={collapseHandler}>
-        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={240} defaultSize={240} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
+        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
@@ -585,9 +607,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             </div>
             <div className="button-row">
               <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
-                <Radio.Button value="None" >关闭流控</Radio.Button>
-                <Radio.Button value="RtsCts" >硬件流控</Radio.Button>
-                <Radio.Button value="XonXoff" >软件流控</Radio.Button>
+                <Radio.Button value="None" >关闭</Radio.Button>
+                <Radio.Button value="RtsCts" >RtsCts</Radio.Button>
+                <Radio.Button value="XonXoff" >XonXoff</Radio.Button>
               </Radio.Group>
             </div>
 
@@ -608,7 +630,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
               </Checkbox>
             </div>
             <div className="checkbox_withinput-row">
-              <Checkbox onChange={(e) => { auto_frame_ref.current = e.target.checked }}>
+              <Checkbox defaultChecked onChange={(e) => { auto_frame_ref.current = e.target.checked }}>
                 自动断帧(ms)
               </Checkbox>
               <InputNumber<number>

@@ -13,7 +13,7 @@ body {
   position: relative;
   background-color: #cecdcd;
   overflow: hidden;
-  min-width: 240px;
+  min-width: 200px;
 }
 
 .left-splitter.collapsed {
