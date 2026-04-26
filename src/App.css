@@ -13,7 +13,7 @@ body {
   position: relative;
   background-color: #cecdcd;
   overflow: hidden;
-  min-width: 200px;
+  min-width: 240px;
 }
 
 .left-splitter.collapsed {
@@ -126,7 +126,7 @@ body {
 .button-row {
   height: 30px;
   align-items: center;
-  margin:2px 10px;
+  margin: 2px 10px;
 }
 
 .open-row {

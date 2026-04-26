@@ -497,7 +497,7 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   return (
     <div className="main-container" >
       <Splitter className="splitter" onCollapse={collapseHandler}>
-        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
+        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={240} defaultSize={240} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
           <div className='left-section'>
             <div className="row" style={{ paddingTop: "10px" }}>
               <label className="label">端口名</label>
@@ -585,9 +585,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
             </div>
             <div className="button-row">
               <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
-                <Radio.Button value="None" >关闭</Radio.Button>
-                <Radio.Button value="RtsCts" >硬件</Radio.Button>
-                <Radio.Button value="XonXoff" >软件</Radio.Button>
+                <Radio.Button value="None" >关闭流控</Radio.Button>
+                <Radio.Button value="RtsCts" >硬件流控</Radio.Button>
+                <Radio.Button value="XonXoff" >软件流控</Radio.Button>
               </Radio.Group>
             </div>
 
