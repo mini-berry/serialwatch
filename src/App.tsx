@@ -1,4 +1,6 @@
 import React, { useState, useEffect, useRef } from 'react';
+import { ConfigProvider, theme } from 'antd';
+import { useSyncExternalStore } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown, Radio } from 'antd';
 import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined } from '@ant-design/icons';
@@ -10,11 +12,6 @@ import type { MenuInfo } from '@rc-component/menu/lib/interface';
 import { message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
-
-// 自定义组件类型定义
-interface SerialDebuggerProps {
-  // 可以添加props定义
-}
 
 interface OutLine {
   content: string;
@@ -36,7 +33,19 @@ interface SerialDevice {
   port: string;
 }
 
-const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
+const SerialDebugger: React.FC = () => {
+  const subscribe = (onStoreChange: () => void) => {
+    window.addEventListener('storage', onStoreChange);
+    return () => {
+      window.removeEventListener('storage', onStoreChange);
+    };
+  };
+  const getSnapshot = () => {
+    const configString = localStorage.getItem('darkMode');
+    return configString === 'true';
+  };
+  const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
+
   // 颜色选择器
   const [color, setColor] = useState<string>('#31a9ff');
   const [flow_control, setFlowControl] = useState<SerialConfig['flow_control']>('None');
@@ -67,6 +76,9 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
   const sendMsgRef = useRef<() => Promise<void> | void>(() => undefined);
+  const openSettings = async () => {
+    await invoke('open_and_activate_window');
+  }
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(() => {
@@ -517,280 +529,285 @@ const SerialDebugger: React.FC<SerialDebuggerProps> = () => {
   },
   ];
   return (
-    <div className="main-container" >
-      <Splitter className="splitter" onCollapse={collapseHandler}>
-        <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
-          <div className='left-section'>
-            <div className="row" style={{ paddingTop: "10px" }}>
-              <label className="label">端口名</label>
-              <Select<string>
-                className="select"
-                value={serial_config.port}
-                options={serial_list.map((device) => ({
-                  value: device.port,
-                  label: `${device.port}-${device.name}`,
-                }))}
-                onChange={(value) => config_change('port', value)}
-                onOpenChange={scan_serial}
-              />
-            </div>
+    <ConfigProvider
+      theme={{
+        algorithm: darkMode ? theme.darkAlgorithm : undefined
+      }}>
+      <div className="main-container">
+        <Splitter onCollapse={collapseHandler} >
+          <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
+            <div className='left-section'>
+              <div className="row" style={{ paddingTop: "10px" }}>
+                <label className="label">端口名</label>
+                <Select<string>
+                  className="select"
+                  value={serial_config.port}
+                  options={serial_list.map((device) => ({
+                    value: device.port,
+                    label: `${device.port}-${device.name}`,
+                  }))}
+                  onChange={(value) => config_change('port', value)}
+                  onOpenChange={scan_serial}
+                />
+              </div>
 
-            <div className="row">
-              <label className="label">波特率</label>
-              <Select<number>
-                value={serial_config.baud}
-                onChange={(value) => config_change('baud', value)}
-                className="select"
-                options={[
-                  { value: 300, label: '300' },
-                  { value: 600, label: '600' },
-                  { value: 1200, label: '1,200' },
-                  { value: 2400, label: '2,400' },
-                  { value: 4800, label: '4,800' },
-                  { value: 9600, label: '9,600' },
-                  { value: 19200, label: '19,200' },
-                  { value: 38400, label: '38,400' },
-                  { value: 57600, label: '57,600' },
-                  { value: 115200, label: '115,200' },
-                  { value: 128000, label: '128,000' },
-                  { value: 230400, label: '230,400' },
-                  { value: 256000, label: '256,000' },
-                  { value: 460800, label: '460,800' },
-                  { value: 921600, label: '921,600' },
-                  { value: 1000000, label: '1,000,000' },
-                  { value: 1500000, label: '1,500,000' },
-                  { value: 2000000, label: '2,000,000' },
-                ]}
-              />
-            </div>
+              <div className="row">
+                <label className="label">波特率</label>
+                <Select<number>
+                  value={serial_config.baud}
+                  onChange={(value) => config_change('baud', value)}
+                  className="select"
+                  options={[
+                    { value: 300, label: '300' },
+                    { value: 600, label: '600' },
+                    { value: 1200, label: '1,200' },
+                    { value: 2400, label: '2,400' },
+                    { value: 4800, label: '4,800' },
+                    { value: 9600, label: '9,600' },
+                    { value: 19200, label: '19,200' },
+                    { value: 38400, label: '38,400' },
+                    { value: 57600, label: '57,600' },
+                    { value: 115200, label: '115,200' },
+                    { value: 128000, label: '128,000' },
+                    { value: 230400, label: '230,400' },
+                    { value: 256000, label: '256,000' },
+                    { value: 460800, label: '460,800' },
+                    { value: 921600, label: '921,600' },
+                    { value: 1000000, label: '1,000,000' },
+                    { value: 1500000, label: '1,500,000' },
+                    { value: 2000000, label: '2,000,000' },
+                  ]}
+                />
+              </div>
 
-            <div className="row">
-              <label className="label">数据位</label>
-              <Select<number>
-                value={serial_config.data_bits}
-                onChange={(value) => config_change('data_bits', value)}
-                className="select"
-                options={[
-                  { value: 5, label: '5' },
-                  { value: 6, label: '6' },
-                  { value: 7, label: '7' },
-                  { value: 8, label: '8' },
-                ]}
-              />
-            </div>
+              <div className="row">
+                <label className="label">数据位</label>
+                <Select<number>
+                  value={serial_config.data_bits}
+                  onChange={(value) => config_change('data_bits', value)}
+                  className="select"
+                  options={[
+                    { value: 5, label: '5' },
+                    { value: 6, label: '6' },
+                    { value: 7, label: '7' },
+                    { value: 8, label: '8' },
+                  ]}
+                />
+              </div>
 
-            <div className="row">
-              <label className="label">校验位</label>
-              <Select<SerialConfig['parity']>
-                value={serial_config.parity}
-                onChange={(value) => config_change('parity', value)}
-                className="select"
-                options={[
-                  { value: 'None', label: 'None' },
-                  { value: 'Odd', label: 'Odd' },
-                  { value: 'Even', label: 'Even' },
-                ]}
-              />
-            </div>
+              <div className="row">
+                <label className="label">校验位</label>
+                <Select<SerialConfig['parity']>
+                  value={serial_config.parity}
+                  onChange={(value) => config_change('parity', value)}
+                  className="select"
+                  options={[
+                    { value: 'None', label: 'None' },
+                    { value: 'Odd', label: 'Odd' },
+                    { value: 'Even', label: 'Even' },
+                  ]}
+                />
+              </div>
 
-            <div className="row">
-              <label className="label">停止位</label>
-              <Select<number>
-                value={serial_config.stop_bits}
-                onChange={(value) => config_change('stop_bits', value)}
-                className="select"
-                options={[
-                  { value: 1, label: '1' },
-                  { value: 2, label: '2' },
-                ]}
-              />
-            </div>
-            <div className="button-row">
-              <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
-                <Radio.Button value="None" >关闭</Radio.Button>
-                <Radio.Button value="RtsCts" >RtsCts</Radio.Button>
-                <Radio.Button value="XonXoff" >XonXoff</Radio.Button>
-              </Radio.Group>
-            </div>
+              <div className="row">
+                <label className="label">停止位</label>
+                <Select<number>
+                  value={serial_config.stop_bits}
+                  onChange={(value) => config_change('stop_bits', value)}
+                  className="select"
+                  options={[
+                    { value: 1, label: '1' },
+                    { value: 2, label: '2' },
+                  ]}
+                />
+              </div>
+              <div className="button-row">
+                <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
+                  <Radio.Button value="None" >关闭</Radio.Button>
+                  <Radio.Button value="RtsCts" >RtsCts</Radio.Button>
+                  <Radio.Button value="XonXoff" >XonXoff</Radio.Button>
+                </Radio.Group>
+              </div>
 
-            <div className="open-row">
-              <Button className="open-button" color={serial_config.open_status ? 'red' : 'blue'} variant="solid" onClick={open_serial}>
-                {serial_config.open_status ? '关闭' : '打开'}
-              </Button>
-            </div>
+              <div className="open-row">
+                <Button className="open-button" color={serial_config.open_status ? 'red' : 'blue'} variant="solid" onClick={open_serial}>
+                  {serial_config.open_status ? '关闭' : '打开'}
+                </Button>
+              </div>
 
-            <Divider size="small" />
+              <Divider size="small" />
 
-            <div>
-              <h3 className="serial-debugger__section-title">接收设置</h3>
-            </div>
-            <div className="checkbox-row">
-              <Checkbox onChange={(e) => { hex_show_ref.current = e.target.checked }}>
-                十六进制显示
-              </Checkbox>
-            </div>
-            <div className="checkbox_withinput-row">
-              <Checkbox defaultChecked onChange={(e) => { auto_frame_ref.current = e.target.checked }}>
-                自动断帧(ms)
-              </Checkbox>
-              <InputNumber<number>
-                min={1}
-                size="small"
-                defaultValue={10}
-                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
-                changeOnWheel
-                onChange={(value) => { auto_frame_time_ref.current = value || 10 }}
-              />
-            </div>
+              <div>
+                <h3 className="serial-debugger__section-title">接收设置</h3>
+              </div>
+              <div className="checkbox-row">
+                <Checkbox onChange={(e) => { hex_show_ref.current = e.target.checked }}>
+                  十六进制显示
+                </Checkbox>
+              </div>
+              <div className="checkbox_withinput-row">
+                <Checkbox defaultChecked onChange={(e) => { auto_frame_ref.current = e.target.checked }}>
+                  自动断帧(ms)
+                </Checkbox>
+                <InputNumber<number>
+                  min={1}
+                  size="small"
+                  defaultValue={10}
+                  parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
+                  changeOnWheel
+                  onChange={(value) => { auto_frame_time_ref.current = value || 10 }}
+                />
+              </div>
 
-            <Divider size="small" />
+              <Divider size="small" />
 
-            <div>
-              <h3 className="serial-debugger__section-title">发送设置</h3>
-            </div>
-            <div className="checkbox-row">
-              <Checkbox checked={hex_send} onChange={hex_send_change}>
-                十六进制发送
-              </Checkbox>
-            </div>
-            <div className="checkbox_withinput-row">
-              <Checkbox value={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
-                定时发送(s)
-              </Checkbox>
-              <InputNumber<number>
-                min={1}
-                size="small"
-                defaultValue={1000}
-                formatter={formatter}
-                parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
-                onChange={(value) => { setTimerInterval((value || 1000) * 100); }}
-                changeOnWheel
-              />
-            </div>
-            <div className="checkbox-row">
-              <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
-                显示发送字符串
-              </Checkbox>
-              <ColorPicker
-                value={color}
-                onChange={(color) => setColor(color.toHexString())}
-                style={{ margin: '-10px 0 0 0' }}
-                size="small"
-                format="hex"
-                disabledFormat
-                disabledAlpha
-                presets={[
-                  {
-                    label: '常用颜色',
-                    colors: [
-                      // 黑色系 (4种) - 反转
-                      '#000000', // 纯黑
-                      '#424242', // 深灰
-                      '#9E9E9E', // 中浅灰
-                      '#FFFFFF', // 纯白
+              <div>
+                <h3 className="serial-debugger__section-title">发送设置</h3>
+              </div>
+              <div className="checkbox-row">
+                <Checkbox checked={hex_send} onChange={hex_send_change}>
+                  十六进制发送
+                </Checkbox>
+              </div>
+              <div className="checkbox_withinput-row">
+                <Checkbox value={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
+                  定时发送(s)
+                </Checkbox>
+                <InputNumber<number>
+                  min={1}
+                  size="small"
+                  defaultValue={1000}
+                  formatter={formatter}
+                  parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
+                  onChange={(value) => { setTimerInterval((value || 1000) * 100); }}
+                  changeOnWheel
+                />
+              </div>
+              <div className="checkbox-row">
+                <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
+                  显示发送字符串
+                </Checkbox>
+                <ColorPicker
+                  value={color}
+                  onChange={(color) => setColor(color.toHexString())}
+                  style={{ margin: '-10px 0 0 0' }}
+                  size="small"
+                  format="hex"
+                  disabledFormat
+                  disabledAlpha
+                  presets={[
+                    {
+                      label: '常用颜色',
+                      colors: [
+                        // 黑色系 (4种) - 反转
+                        '#000000', // 纯黑
+                        '#424242', // 深灰
+                        '#9E9E9E', // 中浅灰
+                        '#FFFFFF', // 纯白
 
-                      // 红色系 (4种) - 反转
-                      '#C62828', // 暗红
-                      '#F44336', // 正红
+                        // 红色系 (4种) - 反转
+                        '#C62828', // 暗红
+                        '#F44336', // 正红
 
-                      // 橙色系 (4种) - 反转
-                      '#EF6C00', // 暗橙
-                      '#FF9800', // 正橙
+                        // 橙色系 (4种) - 反转
+                        '#EF6C00', // 暗橙
+                        '#FF9800', // 正橙
 
-                      // 黄色系 (4种) - 反转
-                      '#F9A825', // 暗黄
-                      '#FFEB3B', // 正黄
+                        // 黄色系 (4种) - 反转
+                        '#F9A825', // 暗黄
+                        '#FFEB3B', // 正黄
 
-                      // 绿色系 (4种) - 反转
-                      '#2E7D32', // 暗绿
-                      '#4CAF50', // 正绿
+                        // 绿色系 (4种) - 反转
+                        '#2E7D32', // 暗绿
+                        '#4CAF50', // 正绿
 
-                      // 蓝色系 (4种) - 反转
-                      '#1565C0', // 暗蓝
-                      '#2196F3', // 正蓝
+                        // 蓝色系 (4种) - 反转
+                        '#1565C0', // 暗蓝
+                        '#2196F3', // 正蓝
 
-                      // 紫色系 (4种) - 反转
-                      '#6A1B9A', // 暗紫
-                      '#9C27B0', // 正紫
-                    ],
-                  },
-                ]}
-              />
-            </div>
-            {/* <div className="checkbox-row">
+                        // 紫色系 (4种) - 反转
+                        '#6A1B9A', // 暗紫
+                        '#9C27B0', // 正紫
+                      ],
+                    },
+                  ]}
+                />
+              </div>
+              {/* <div className="checkbox-row">
               <Checkbox>自动重连</Checkbox>
             </div> */}
-            <div style={{ height: "30px" }}></div>
-          </div>
-          <div className="bottom-bar">
-            <div className='inner-icon' onClick={clean_output}>
-              <ClearOutlined className='icon clear-icon' />
+              <div style={{ height: "30px" }}></div>
             </div>
-            <div className='inner-icon'>
-              <SettingOutlined className='icon setting-icon' />
-            </div>
-          </div>
-        </Splitter.Panel>
-
-        <Splitter.Panel>
-          <div className="right-splitter">
-            {messageHolder}
-            <Dropdown menu={{ items: secMenu }} trigger={['contextMenu']} open={secMenuOpen} onOpenChange={(open) => setSecMenuOpen(open)}>
-              <div className="show-section" id="show-section">
-                {receive_text.map((logLine, index) => {
-                  return (
-                    <Dropdown key={index} menu={{ items: logMenu, onClick: (e) => handleMenuClick(e, index) }} trigger={['contextMenu']}>
-                      <div
-                        key={index}
-                        style={{
-                          color: logLine.color,
-                          wordBreak: 'break-all'
-                        }}
-                        onContextMenu={(e) => {
-                          e.stopPropagation(); setSecMenuOpen(false);
-                          let selection = window.getSelection()?.toString() || '';
-                          setSelectedText(selection);
-                          setSelectedBool(selection.length > 0);
-                        }
-                        }
-                      >
-                        {logLine.content}
-                      </div>
-                    </Dropdown>
-                  );
-                })}
+            <div className="bottom-bar">
+              <div className='inner-icon' onClick={clean_output}>
+                <ClearOutlined className='icon clear-icon' />
               </div>
-            </Dropdown>
-            <div className="send-section">
-              <div className="text-section">
-                <Input.TextArea
-                  ref={inputRef}
-                  autoSize={{ minRows: 5, maxRows: 5 }}
-                  value={send_data}
-                  onChange={input_change}
-                  className="text-area"
-                  placeholder="请输入文本..."
-                />
-                <div className="send-button-container">
-                  <Button className="send-button"
-                    onClick={send_msg}
-                  >
-                    发送
-                  </Button>
+              <div className='inner-icon' onClick={openSettings}>
+                <SettingOutlined className='icon setting-icon' />
+              </div>
+            </div>
+          </Splitter.Panel>
+
+          <Splitter.Panel>
+            <div className="right-splitter">
+              {messageHolder}
+              <Dropdown menu={{ items: secMenu }} trigger={['contextMenu']} open={secMenuOpen} onOpenChange={(open) => setSecMenuOpen(open)}>
+                <div className="show-section" id="show-section">
+                  {receive_text.map((logLine, index) => {
+                    return (
+                      <Dropdown key={index} menu={{ items: logMenu, onClick: (e) => handleMenuClick(e, index) }} trigger={['contextMenu']}>
+                        <div
+                          key={index}
+                          style={{
+                            color: logLine.color,
+                            wordBreak: 'break-all'
+                          }}
+                          onContextMenu={(e) => {
+                            e.stopPropagation(); setSecMenuOpen(false);
+                            let selection = window.getSelection()?.toString() || '';
+                            setSelectedText(selection);
+                            setSelectedBool(selection.length > 0);
+                          }
+                          }
+                        >
+                          {logLine.content}
+                        </div>
+                      </Dropdown>
+                    );
+                  })}
+                </div>
+              </Dropdown>
+              <div className="send-section">
+                <div className="text-section">
+                  <Input.TextArea
+                    ref={inputRef}
+                    autoSize={{ minRows: 5, maxRows: 5 }}
+                    value={send_data}
+                    onChange={input_change}
+                    className="text-area"
+                    placeholder="请输入文本..."
+                  />
+                  <div className="send-button-container">
+                    <Button className="send-button"
+                      onClick={send_msg}
+                    >
+                      发送
+                    </Button>
+                  </div>
                 </div>
               </div>
+              <div className="log-section">
+                <UpOutlined />
+                &nbsp;发送:{send_count}
+                &nbsp;&nbsp;|
+                &nbsp;<DownOutlined />
+                &nbsp;接收:{receive_count}
+              </div>
             </div>
-            <div className="log-section">
-              <UpOutlined />
-              &nbsp;发送:{send_count}
-              &nbsp;&nbsp;|
-              &nbsp;<DownOutlined />
-              &nbsp;接收:{receive_count}
-            </div>
-          </div>
-        </Splitter.Panel >
-      </Splitter >
-    </div >
+          </Splitter.Panel >
+        </Splitter >
+      </div >
+    </ConfigProvider>
   );
 };
 

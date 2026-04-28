@@ -1,7 +1,7 @@
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::async_runtime::Receiver;
-use tauri::State;
+use tauri::{Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
@@ -53,8 +53,8 @@ pub fn run() {
             std::thread::spawn(move || loop {
                 match data_receiver.blocking_recv() {
                     Some(MsgToFrontend::DataUpdated(data)) => {
-                        #[cfg(debug_assertions)]
                         app_handle.emit("data-updated", data).unwrap_or_else(|err| {
+                            #[cfg(debug_assertions)]
                             eprintln!("Failed to emit event: {err}");
                         });
                     }
@@ -62,6 +62,7 @@ pub fn run() {
                         #[cfg(debug_assertions)]
                         eprintln!("Main thread received serial error: {err}");
                         app_handle.emit("serial-failed", err).unwrap_or_else(|err| {
+                            #[cfg(debug_assertions)]
                             eprintln!("Failed to emit event: {err}");
                         });
                     }
@@ -90,6 +91,8 @@ pub fn run() {
             scan_serial,
             update_config,
             send_msg,
+            open_and_activate_window,
+            close_window
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -130,6 +133,13 @@ async fn serial_thread(
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
                 eprintln!("Config sender has been disconnected. Exiting serial thread.");
+                // data_sender
+                //     .send(MsgToFrontend::Tips("MPSC Error, Code 01.".to_string()))
+                //     .await
+                //     .unwrap_or_else(|err| {
+                //         #[cfg(debug_assertions)]
+                //         eprintln!("Failed to send tip to main thread: {err}");
+                //     });
                 break;
             }
         }
@@ -146,14 +156,24 @@ async fn serial_thread(
                                 #[cfg(debug_assertions)]
                                 println!("Received msg: {:?}", received_data);
                                 data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|err| {
+                                    #[cfg(debug_assertions)]
                                     eprintln!("Failed to send data to main thread: {err}");
                                 });
                             }
                             Ok(_) => {}
                             Err(e) => {
+                                #[cfg(debug_assertions)]
                                 eprintln!("Error reading from serial port: {}", e);
+                    //             data_sender
+                    // .send(MsgToFrontend::Tips("Serial Receive Error, Code 02.".to_string()))
+                    // .await
+                    // .unwrap_or_else(|err| {
+                    //     #[cfg(debug_assertions)]
+                    //     eprintln!("Failed to send tip to main thread: {err}");
+                    // });
                                 serial_port = None;
                                 data_sender.send(MsgToFrontend::SerialFailed(format!("{e}"))).await.unwrap_or_else(|err| {
+                                    #[cfg(debug_assertions)]
                                     eprintln!("Failed to send error to main thread: {err}");
                                 });
                             }
@@ -175,7 +195,17 @@ async fn serial_thread(
                             println!("Sent message: {msg:?}");
                         }
                         Err(e) => {
+                            #[cfg(debug_assertions)]
                             eprintln!("Error writing to serial port: {}", e);
+                            // data_sender
+                            //     .send(MsgToFrontend::Tips(
+                            //         "Serial Write Error, Code 03.".to_string(),
+                            //     ))
+                            //     .await
+                            //     .unwrap_or_else(|err| {
+                            //         #[cfg(debug_assertions)]
+                            //         eprintln!("Failed to send tip to main thread: {err}");
+                            //     });
                             serial_port = None;
                         }
                     }
@@ -184,10 +214,11 @@ async fn serial_thread(
                     eprintln!("Serial port is not open. Cannot send data.");
                     data_sender
                         .send(MsgToFrontend::SerialFailed(
-                            "串口未打开，无法发送数据".to_string(),
+                            "Serial port is not open.".to_string(),
                         ))
                         .await
                         .unwrap_or_else(|err| {
+                            #[cfg(debug_assertions)]
                             eprintln!("Failed to send error to main thread: {err}");
                         });
                 }
@@ -196,12 +227,29 @@ async fn serial_thread(
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
                 eprintln!("Sender has been disconnected. Exiting serial thread.");
+                // data_sender
+                //     .send(MsgToFrontend::Tips(
+                //         "MPSC Write Error, Code 04.".to_string(),
+                //     ))
+                //     .await
+                //     .unwrap_or_else(|err| {
+                //         #[cfg(debug_assertions)]
+                //         eprintln!("Failed to send tip to main thread: {err}");
+                //     });
                 break;
             }
         }
         tokio::time::sleep(std::time::Duration::from_millis(10)).await;
     }
+    #[cfg(debug_assertions)]
     eprintln!("Serial thread exiting.");
+    // data_sender
+    //     .send(MsgToFrontend::Tips("Serial Error, Code 05.".to_string()))
+    //     .await
+    //     .unwrap_or_else(|err| {
+    //         #[cfg(debug_assertions)]
+    //         eprintln!("Failed to send tip to main thread: {err}");
+    //     });
 }
 #[tauri::command]
 async fn scan_serial() -> Vec<SerialDevice> {
@@ -242,6 +290,7 @@ async fn scan_serial() -> Vec<SerialDevice> {
             }
         }
         Err(e) => {
+            #[cfg(debug_assertions)]
             eprintln!("Error scanning serial ports: {}", e);
         }
     }
@@ -333,5 +382,40 @@ impl Config for tokio_serial::SerialPortBuilder {
                 config::FlowControl::RtsCts => tokio_serial::FlowControl::Hardware,
                 config::FlowControl::XonXoff => tokio_serial::FlowControl::Software,
             })
+    }
+}
+
+#[tauri::command]
+async fn open_and_activate_window(
+    app_handle: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+) {
+    // 1. 尝试获取已存在的窗口，避免重复创建
+    if let Some(window) = app_handle.get_webview_window("settings") {
+        // 如果窗口存在，则激活它
+        window.set_focus().unwrap();
+        window.show().unwrap();
+        return;
+    }
+
+    // 2. 如果窗口不存在，则创建并激活
+    let _window = tauri::WebviewWindowBuilder::new(
+        &app_handle,
+        "settings",
+        tauri::WebviewUrl::App("settings.html".into()),
+    )
+    .title("设置")
+    .inner_size(400.0, 300.0)
+    .resizable(false)
+    .center()
+    .parent(&webview_window)
+    .unwrap()
+    .build();
+}
+
+#[tauri::command]
+async fn close_window(app_handle: tauri::AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("settings") {
+        window.close().unwrap();
     }
 }

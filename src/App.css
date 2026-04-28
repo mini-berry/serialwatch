@@ -11,7 +11,7 @@ body {
 
 .left-splitter {
   position: relative;
-  background-color: #cecdcd;
+  background-color: color-mix(in srgb, var(--ant-color-bg-base), gray 40%);
   overflow: hidden;
   min-width: 200px;
 }
@@ -58,7 +58,7 @@ body {
   margin-top: 10px;
   background-color: rgb(15, 119, 157);
   transition: all 0.2s ease;
-  color: white;
+  color: var(--ant-color-bg-base);
 }
 
 .inner-icon:hover {
@@ -175,11 +175,11 @@ body {
 
 .right-splitter {
   position: relative;
-  width: 100%;
+  margin-left: -1px;
   height: 100%;
   display: flex;
   overflow: hidden;
-  background-color: #f1f1f1;
+  background-color: color-mix(in srgb, var(--ant-color-bg-base), gray 20%);
 }
 
 .show-section {
@@ -191,7 +191,7 @@ body {
   overflow-wrap: break-word;
   width: 100%;
   /* 标准属性 */
-  border-bottom: 1px solid #d9dadb;
+  border-bottom: 1px solid var(--ant-color-border);
 
   /* 以下是新增的滚动条相关样式 */
   overflow-y: auto;
@@ -238,14 +238,13 @@ body {
 .send-button {
   height: 120px;
   margin-right: 5px;
-  background-color: #0ca4dc;
-  color: rgb(255, 255, 255);
+  background-color: var(--ant-blue-5);
+  color: var(--ant-blue-1)
 }
 
 .log-section {
   display: flex;
   align-items: center;
   justify-content: right;
-  background-color: #f0f0f0;
-  border-top: 1px solid #d9dadb;
+  border-top: 1px solid var(--ant-color-border);
 }
