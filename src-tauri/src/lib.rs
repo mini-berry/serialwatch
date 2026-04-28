@@ -54,24 +54,24 @@ pub fn run() {
             std::thread::spawn(move || loop {
                 match data_receiver.blocking_recv() {
                     Some(MsgToFrontend::DataUpdated(data)) => {
-                        app_handle.emit("data-updated", data).unwrap_or_else(|err| {
+                        app_handle.emit("data-updated", data).unwrap_or_else(|_err| {
                             #[cfg(debug_assertions)]
-                            eprintln!("Failed to emit event: {err}");
+                            eprintln!("Failed to emit event: {_err}");
                         });
                     }
                     Some(MsgToFrontend::SerialFailed(err)) => {
                         #[cfg(debug_assertions)]
                         eprintln!("Main thread received serial error: {err}");
-                        app_handle.emit("serial-failed", err).unwrap_or_else(|err| {
+                        app_handle.emit("serial-failed", err).unwrap_or_else(|_err| {
                             #[cfg(debug_assertions)]
-                            eprintln!("Failed to emit event: {err}");
+                            eprintln!("Failed to emit event: {_err}");
                         });
                     }
                     Some(MsgToFrontend::Tips(msg)) => {
                         #[cfg(debug_assertions)]
                         println!("Main thread received a tip: {msg}");
-                        app_handle.emit("tips", msg).unwrap_or_else(|err| {
-                            eprintln!("Failed to emit event: {err}");
+                        app_handle.emit("tips", msg).unwrap_or_else(|_err| {
+                            eprintln!("Failed to emit event: {_err}");
                         });
                     }
                     None => {
@@ -139,9 +139,9 @@ async fn serial_thread(
                 data_sender
                     .send(MsgToFrontend::Tips("MPSC Error, Code 01.".to_string()))
                     .await
-                    .unwrap_or_else(|err| {
+                    .unwrap_or_else(|_err| {
                         #[cfg(debug_assertions)]
-                        eprintln!("Failed to send tip to main thread: {err}");
+                        eprintln!("Failed to send tip to main thread: {_err}");
                     });
                 break;
             }
@@ -158,9 +158,9 @@ async fn serial_thread(
                                 let received_data = &storage [..n];
                                 #[cfg(debug_assertions)]
                                 println!("Received msg: {:?}", received_data);
-                                data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|err| {
+                                data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send data to main thread: {err}");
+                                    eprintln!("Failed to send data to main thread: {_err}");
                                 });
                             }
                             Ok(_) => {}
@@ -170,14 +170,14 @@ async fn serial_thread(
                                 data_sender
                     .send(MsgToFrontend::Tips("Serial Receive Error, Code 02.".to_string()))
                     .await
-                    .unwrap_or_else(|err| {
+                    .unwrap_or_else(|_err| {
                         #[cfg(debug_assertions)]
-                        eprintln!("Failed to send tip to main thread: {err}");
+                        eprintln!("Failed to send tip to main thread: {_err}");
                     });
                                 serial_port = None;
-                                data_sender.send(MsgToFrontend::SerialFailed(format!("{e}"))).await.unwrap_or_else(|err| {
+                                data_sender.send(MsgToFrontend::SerialFailed(format!("{e}"))).await.unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send error to main thread: {err}");
+                                    eprintln!("Failed to send error to main thread: {_err}");
                                 });
                             }
                         }
@@ -210,9 +210,9 @@ async fn serial_thread(
                                     "Serial Write Timeout, Code 03.".to_string(),
                                 ))
                                 .await
-                                .unwrap_or_else(|err| {
+                                .unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send tip to main thread: {err}");
+                                    eprintln!("Failed to send tip to main thread: {_err}");
                                 });
                             if let Some(port) = serial_port.take() {
                                 let _ = port.clear(ClearBuffer::Output);
@@ -230,9 +230,9 @@ async fn serial_thread(
                             "Serial port is not open.".to_string(),
                         ))
                         .await
-                        .unwrap_or_else(|err| {
+                        .unwrap_or_else(|_err| {
                             #[cfg(debug_assertions)]
-                            eprintln!("Failed to send error to main thread: {err}");
+                            eprintln!("Failed to send error to main thread: {_err}");
                         });
                 }
             }
@@ -245,9 +245,9 @@ async fn serial_thread(
                         "MPSC Write Error, Code 04.".to_string(),
                     ))
                     .await
-                    .unwrap_or_else(|err| {
+                    .unwrap_or_else(|_err| {
                         #[cfg(debug_assertions)]
-                        eprintln!("Failed to send tip to main thread: {err}");
+                        eprintln!("Failed to send tip to main thread: {_err}");
                     });
                 break;
             }
@@ -259,9 +259,9 @@ async fn serial_thread(
     data_sender
         .send(MsgToFrontend::Tips("Serial Error, Code 05.".to_string()))
         .await
-        .unwrap_or_else(|err| {
+        .unwrap_or_else(|_err| {
             #[cfg(debug_assertions)]
-            eprintln!("Failed to send tip to main thread: {err}");
+            eprintln!("Failed to send tip to main thread: {_err}");
         });
 }
 #[tauri::command]
@@ -302,9 +302,9 @@ async fn scan_serial() -> Vec<SerialDevice> {
                 }
             }
         }
-        Err(e) => {
+        Err(_e) => {
             #[cfg(debug_assertions)]
-            eprintln!("Error scanning serial ports: {}", e);
+            eprintln!("Error scanning serial ports: {_e}");
         }
     }
     devices.sort_by(|a, b| a.name.cmp(&b.name));

@@ -12,9 +12,13 @@
   "app": {
     "windows": [
       {
+        "label": "main",
+        "url": "index.html",
         "title": "串口调试助手 S.W.R.",
-        "width": 800,
-        "height": 600
+        "width": 600,
+        "height": 550,
+        "minWidth": 400,
+        "minHeight": 250
       }
     ],
     "security": {

@@ -5,6 +5,7 @@ import { InfoOutlined, LaptopOutlined, CheckOutlined, CloseOutlined } from '@ant
 import './SettingPage.css';
 import { useEffect, useState } from 'react';
 import { invoke } from '@tauri-apps/api/core';
+import { openUrl } from '@tauri-apps/plugin-opener';
 
 const items: MenuProps['items'] = [{
     key: '1',
@@ -19,6 +20,9 @@ const items: MenuProps['items'] = [{
 const SettingPage: React.FC = () => {
     const [currentKey, setCurrentKey] = useState('1');
     const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
+    const handleOpen = async (url: string) => {
+        await openUrl(url);
+    }
 
     const onClose = async () => {
         invoke('close_window');
@@ -56,7 +60,7 @@ const SettingPage: React.FC = () => {
             <h2>关于此应用</h2>
             <p>作者: Mini-Berry</p>
             <p>开源地址:</p>
-            <a href="https://github.com/mini-berry/serialwatch" target="_blank" rel="noopener noreferrer">https://github.com/mini-berry/serialwatch</a>
+            <a onClick={(e) => { e.preventDefault(); handleOpen('https://github.com/mini-berry/serialwatch'); }} href="https://github.com/mini-berry/serialwatch" target="_blank" rel="noopener noreferrer">https://github.com/mini-berry/serialwatch</a>
         </div>)
     };
     const handleMenuClick = (e: any) => {
