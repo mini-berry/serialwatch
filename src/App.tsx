@@ -48,7 +48,6 @@ const SerialDebugger: React.FC = () => {
 
   // 颜色选择器
   const [color, setColor] = useState<string>('#31a9ff');
-  const [flow_control, setFlowControl] = useState<SerialConfig['flow_control']>('None');
   // 发送接收计数
   const [receive_count, setReceiveCount] = useState<number>(0);
   const [send_count, setSendCount] = useState<number>(0);
@@ -121,42 +120,30 @@ const SerialDebugger: React.FC = () => {
   useEffect(() => {
     let unlistenDataUpdated: (() => void) | undefined;
     let unlistenSerialFailed: (() => void) | undefined;
-    // let unlistenSerialError: (() => void) | undefined;
-
-    const savedConfigString = localStorage.getItem('serialConfig');
-
-    if (savedConfigString) {
-      try {
-        // 在 try 块中执行可能出错的操作
-        let savedConfig = JSON.parse(savedConfigString) as SerialConfig;
-        savedConfig.open_status = false;
-        setSerialConfig(savedConfig);
-      } catch (error) {
-        console.error('解析本地配置时出错:', error);
-      }
-    }
+    let unlistenSerialError: (() => void) | undefined;
 
     invoke('scan_serial').then((devices) => {
       let deviceList = devices as Array<SerialDevice>;
       setSerialList(deviceList);
 
-      if (deviceList.length > 0) {
-        if (deviceList.every(device => device.port !== serial_config.port)) {
-          setSerialConfig((prevConfig) => {
-            const nextConfig: SerialConfig = {
-              ...prevConfig,
-              port: deviceList[0].port,
-            };
-            invoke('update_config', { newConfig: nextConfig });
-            return nextConfig;
-          });
+      let savedConfig: SerialConfig | undefined = undefined;
+      const savedConfigString = localStorage.getItem('serialConfig');
+      if (savedConfigString) {
+        try {
+          savedConfig = JSON.parse(savedConfigString) as SerialConfig;
+          savedConfig.open_status = false;
+        } catch (e) {
         }
       }
-      else {
-        setSerialConfig((prevConfig) => ({
-          ...prevConfig,
-          port: '',
-        }));
+
+      if (savedConfig) {
+        if (deviceList.some(device => device.port === savedConfig.port)) {
+          setSerialConfig(savedConfig);
+        }
+        else {
+          let newConfig = { ...savedConfig, port: deviceList.length > 0 ? deviceList[0].port : '' };
+          setSerialConfig(newConfig);
+        }
       }
     });
 
@@ -220,6 +207,11 @@ const SerialDebugger: React.FC = () => {
         }));
         messageApi.error(`串口错误: ${errorMessage}`);
       });
+
+      unlistenSerialError = await listen('tips', (event) => {
+        const errorMessage = event.payload as string;
+        messageApi.info(`串口错误: ${errorMessage}`);
+      });
     };
 
     setupListeners();
@@ -230,6 +222,9 @@ const SerialDebugger: React.FC = () => {
       }
       if (unlistenSerialFailed) {
         unlistenSerialFailed();
+      }
+      if (unlistenSerialError) {
+        unlistenSerialError();
       }
     };
   }, []);
@@ -622,7 +617,7 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="button-row">
-                <Radio.Group size="small" buttonStyle="solid" block value={flow_control} onChange={(e) => { setFlowControl(e.target.value); config_change('flow_control', e.target.value) }}>
+                <Radio.Group size="small" buttonStyle="solid" block value={serial_config.flow_control} onChange={(e) => { config_change('flow_control', e.target.value) }}>
                   <Radio.Button value="None" >关闭</Radio.Button>
                   <Radio.Button value="RtsCts" >RtsCts</Radio.Button>
                   <Radio.Button value="XonXoff" >XonXoff</Radio.Button>
@@ -670,7 +665,7 @@ const SerialDebugger: React.FC = () => {
                 </Checkbox>
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox value={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
+                <Checkbox checked={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
                   定时发送(s)
                 </Checkbox>
                 <InputNumber<number>
