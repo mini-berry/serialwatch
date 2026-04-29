@@ -132,13 +132,8 @@ async fn serial_thread(
                             Err(e) => {
                                 #[cfg(debug_assertions)]
                                 eprintln!("Error reading from serial port: {}", e);
-                                app_handle
-                                    .emit("tips", "Serial Receive Error, Code 02.".to_string())
-                                    .unwrap_or_else(|_err| {
-                                        #[cfg(debug_assertions)]
-                                        eprintln!("Failed to send tip to main thread: {_err}");});
                                 serial_port = None;
-                                app_handle.emit("serial-failed", "Serial port error. Please check the connection.".to_string()).unwrap_or_else(|_err| {
+                                app_handle.emit("serial-failed", format!("{e}")).unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
                                     eprintln!("Failed to send error to main thread: {_err}");
                                 });
