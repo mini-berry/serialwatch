@@ -95,6 +95,11 @@ async fn serial_thread(
                 }
                 // 关闭串口
                 else {
+                    if let Some(port) = serial_port.take() {
+                        let _ = port.clear(ClearBuffer::Output);
+                        let _ = port.clear(ClearBuffer::Input);
+                        drop(port);
+                    }
                     serial_port = None;
                 }
             }
@@ -128,16 +133,21 @@ async fn serial_thread(
                                     eprintln!("Failed to emit data to frontend: {_err}");
                                 });
                             }
-                            Ok(_) => {}
                             Err(e) => {
                                 #[cfg(debug_assertions)]
                                 eprintln!("Error reading from serial port: {}", e);
+                                    if let Some(port) = serial_port.take() {
+                                    let _ = port.clear(ClearBuffer::Output);
+                                    let _ = port.clear(ClearBuffer::Input);
+                                    drop(port);
+                                }
                                 serial_port = None;
                                 app_handle.emit("serial-failed", format!("{e}")).unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
                                     eprintln!("Failed to send error to main thread: {_err}");
                                 });
                             }
+                            _ => {}
                         }
                     }
                     _  =  tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
