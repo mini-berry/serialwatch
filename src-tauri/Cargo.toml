@@ -1,6 +1,6 @@
 [package]
 name = "serialwatch"
-version = "0.2.0"
+version = "1.0.0"
 description = "SerialWatch is a cross-platform serial port monitoring application built with Rust and Tauri."
 authors = ["berry"]
 edition = "2021"
