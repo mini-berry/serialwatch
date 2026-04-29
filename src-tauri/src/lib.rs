@@ -136,7 +136,7 @@ async fn serial_thread(
                             Err(e) => {
                                 #[cfg(debug_assertions)]
                                 eprintln!("Error reading from serial port: {}", e);
-                                    if let Some(port) = serial_port.take() {
+                                if let Some(port) = serial_port.take() {
                                     let _ = port.clear(ClearBuffer::Output);
                                     let _ = port.clear(ClearBuffer::Input);
                                     drop(port);
