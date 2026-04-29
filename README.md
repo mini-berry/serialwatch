@@ -7,6 +7,18 @@
 - Ubuntu 22 及以上版本
 - Windows 7 及以上版本
 
+Linux需要安装libwebkit2gtk
+
+debian
+``` sh
+sudo apt install libwebkit2gtk-4.1-dev
+```
+
+fedora
+``` sh
+sudo dnf install webkit2gtk4.1-devel
+```
+
 ## 技术栈
 
 - Tauri
