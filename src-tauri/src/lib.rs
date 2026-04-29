@@ -1,6 +1,7 @@
 use serde::Serialize;
 use std::sync::Arc;
 use tauri::async_runtime::Receiver;
+use tauri::Emitter;
 use tauri::{Manager, State};
 use tokio::io::{AsyncReadExt, AsyncWriteExt};
 use tokio::sync::mpsc;
@@ -42,46 +43,11 @@ pub fn run() {
     let msg_sender = Arc::new(msg_sender);
     let msg_state = MsgSenderState { sender: msg_sender };
 
-    let (data_sender, mut data_receiver) = mpsc::channel::<MsgToFrontend>(100);
-
-    let rt = tokio::runtime::Runtime::new().unwrap();
-    rt.spawn(serial_thread(data_sender, msg_receiver, config_receiver));
-
     tauri::Builder::default()
         .setup(|_app| {
             let app_handle = _app.handle().clone();
-            use tauri::Emitter;
-            std::thread::spawn(move || loop {
-                match data_receiver.blocking_recv() {
-                    Some(MsgToFrontend::DataUpdated(data)) => {
-                        app_handle.emit("data-updated", data).unwrap_or_else(|_err| {
-                            #[cfg(debug_assertions)]
-                            eprintln!("Failed to emit event: {_err}");
-                        });
-                    }
-                    Some(MsgToFrontend::SerialFailed(err)) => {
-                        #[cfg(debug_assertions)]
-                        eprintln!("Main thread received serial error: {err}");
-                        app_handle.emit("serial-failed", err).unwrap_or_else(|_err| {
-                            #[cfg(debug_assertions)]
-                            eprintln!("Failed to emit event: {_err}");
-                        });
-                    }
-                    Some(MsgToFrontend::Tips(msg)) => {
-                        #[cfg(debug_assertions)]
-                        println!("Main thread received a tip: {msg}");
-                        app_handle.emit("tips", msg).unwrap_or_else(|_err| {
-                            eprintln!("Failed to emit event: {_err}");
-                        });
-                    }
-                    None => {
-                        #[cfg(debug_assertions)]
-                        eprintln!(
-                            "Data sender has been disconnected. Exiting data receiver thread."
-                        );
-                        break;
-                    }
-                }
+            tauri::async_runtime::spawn(async move {
+                serial_thread(msg_receiver, config_receiver, app_handle).await;
             });
             Ok(())
         })
@@ -100,9 +66,9 @@ pub fn run() {
 }
 
 async fn serial_thread(
-    data_sender: Sender<MsgToFrontend>,
     mut msg_receiver: Receiver<Vec<u8>>,
     mut config_receiver: Receiver<config::SerialConfig>,
+    app_handle: tauri::AppHandle,
 ) {
     let mut serial_port: Option<tokio_serial::SerialStream> = None;
 
@@ -136,9 +102,8 @@ async fn serial_thread(
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
                 eprintln!("Config sender has been disconnected. Exiting serial thread.");
-                data_sender
-                    .send(MsgToFrontend::Tips("MPSC Error, Code 01.".to_string()))
-                    .await
+                app_handle
+                    .emit("tips", "MPSC Error, Code 01.".to_string())
                     .unwrap_or_else(|_err| {
                         #[cfg(debug_assertions)]
                         eprintln!("Failed to send tip to main thread: {_err}");
@@ -158,24 +123,22 @@ async fn serial_thread(
                                 let received_data = &storage [..n];
                                 #[cfg(debug_assertions)]
                                 println!("Received msg: {:?}", received_data);
-                                data_sender.send(MsgToFrontend::DataUpdated(received_data.to_vec())).await.unwrap_or_else(|_err| {
+                                app_handle.emit("data-updated", received_data.to_vec()).unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send data to main thread: {_err}");
+                                    eprintln!("Failed to emit data to frontend: {_err}");
                                 });
                             }
                             Ok(_) => {}
                             Err(e) => {
                                 #[cfg(debug_assertions)]
                                 eprintln!("Error reading from serial port: {}", e);
-                                data_sender
-                    .send(MsgToFrontend::Tips("Serial Receive Error, Code 02.".to_string()))
-                    .await
-                    .unwrap_or_else(|_err| {
-                        #[cfg(debug_assertions)]
-                        eprintln!("Failed to send tip to main thread: {_err}");
-                    });
+                                app_handle
+                                    .emit("tips", "Serial Receive Error, Code 02.".to_string())
+                                    .unwrap_or_else(|_err| {
+                                        #[cfg(debug_assertions)]
+                                        eprintln!("Failed to send tip to main thread: {_err}");});
                                 serial_port = None;
-                                data_sender.send(MsgToFrontend::SerialFailed(format!("{e}"))).await.unwrap_or_else(|_err| {
+                                app_handle.emit("serial-failed", "Serial port error. Please check the connection.".to_string()).unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
                                     eprintln!("Failed to send error to main thread: {_err}");
                                 });
@@ -205,14 +168,14 @@ async fn serial_thread(
                         _ => {
                             #[cfg(debug_assertions)]
                             eprintln!("Error writing to serial port.");
-                            data_sender
-                                .send(MsgToFrontend::SerialFailed(
+                            app_handle
+                                .emit(
+                                    "serial-failed",
                                     "Serial Write Timeout, Code 03.".to_string(),
-                                ))
-                                .await
+                                )
                                 .unwrap_or_else(|_err| {
                                     #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send tip to main thread: {_err}");
+                                    eprintln!("Failed to send error to main thread: {_err}");
                                 });
                             if let Some(port) = serial_port.take() {
                                 let _ = port.clear(ClearBuffer::Output);
@@ -225,11 +188,8 @@ async fn serial_thread(
                 } else {
                     #[cfg(debug_assertions)]
                     eprintln!("Serial port is not open. Cannot send data.");
-                    data_sender
-                        .send(MsgToFrontend::SerialFailed(
-                            "Serial port is not open.".to_string(),
-                        ))
-                        .await
+                    app_handle
+                        .emit("serial-failed", "Serial port is not open.".to_string())
                         .unwrap_or_else(|_err| {
                             #[cfg(debug_assertions)]
                             eprintln!("Failed to send error to main thread: {_err}");
@@ -240,11 +200,8 @@ async fn serial_thread(
             Err(mpsc::error::TryRecvError::Disconnected) => {
                 #[cfg(debug_assertions)]
                 eprintln!("Sender has been disconnected. Exiting serial thread.");
-                data_sender
-                    .send(MsgToFrontend::Tips(
-                        "MPSC Write Error, Code 04.".to_string(),
-                    ))
-                    .await
+                app_handle
+                    .emit("tips", "MPSC Write Error, Code 04.".to_string())
                     .unwrap_or_else(|_err| {
                         #[cfg(debug_assertions)]
                         eprintln!("Failed to send tip to main thread: {_err}");
@@ -256,9 +213,8 @@ async fn serial_thread(
     }
     #[cfg(debug_assertions)]
     eprintln!("Serial thread exiting.");
-    data_sender
-        .send(MsgToFrontend::Tips("Serial Error, Code 05.".to_string()))
-        .await
+    app_handle
+        .emit("tips", "Serial Error, Code 05.".to_string())
         .unwrap_or_else(|_err| {
             #[cfg(debug_assertions)]
             eprintln!("Failed to send tip to main thread: {_err}");
