@@ -492,6 +492,9 @@ const SerialDebugger: React.FC = () => {
       copyAllText();
     }
   };
+  const preventContextMenu = (e: React.MouseEvent) => {
+    e.preventDefault();
+  };
   const logMenu: MenuProps['items'] = [{
     key: 'copy',
     label: '复制',
@@ -531,7 +534,7 @@ const SerialDebugger: React.FC = () => {
       <div className="main-container">
         <Splitter onCollapse={collapseHandler} >
           <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
-            <div className='left-section'>
+            <div className='left-section' onContextMenu={preventContextMenu}>
               <div className="row" style={{ paddingTop: "10px" }}>
                 <label className="label">端口名</label>
                 <Select<string>
@@ -733,7 +736,7 @@ const SerialDebugger: React.FC = () => {
             </div> */}
               <div style={{ height: "30px" }}></div>
             </div>
-            <div className="bottom-bar">
+            <div className="bottom-bar" onContextMenu={preventContextMenu}>
               <div className='inner-icon' onClick={clean_output}>
                 <ClearOutlined className='icon clear-icon' />
               </div>
@@ -772,9 +775,9 @@ const SerialDebugger: React.FC = () => {
                   })}
                 </div>
               </Dropdown>
-              <div className="send-section">
-                <div className="text-section">
-                  <Input.TextArea
+              <div className="send-section" onContextMenu={preventContextMenu}>
+                <div className="text-section" >
+                  <Input.TextArea onContextMenu={(e) => e.stopPropagation()}
                     ref={inputRef}
                     autoSize={{ minRows: 5, maxRows: 5 }}
                     value={send_data}
@@ -791,7 +794,7 @@ const SerialDebugger: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="log-section">
+              <div className="log-section" onContextMenu={preventContextMenu}>
                 <UpOutlined />
                 &nbsp;发送:{send_count}
                 &nbsp;&nbsp;|
