@@ -180,6 +180,7 @@ body {
 .right-splitter {
   position: relative;
   margin-left: -1px;
+  margin-right: -1px;
   height: 100%;
   display: flex;
   overflow: hidden;
