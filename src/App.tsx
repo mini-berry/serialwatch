@@ -58,6 +58,7 @@ const SerialDebugger: React.FC = () => {
   const last_receive_time_ref = useRef<number>(0);
   const auto_frame_ref = useRef(true);
   const auto_frame_time_ref = useRef(10);
+  const [auto_frame_time, setAutoFrameTime] = useState<number>(10);
   // 显示发送字符串
   const show_send_message_ref = useRef(false);
   // 十六进制显示
@@ -146,6 +147,22 @@ const SerialDebugger: React.FC = () => {
         }
       }
     });
+
+    const localAutoSendTime = localStorage.getItem('autoSendTime');
+    if (localAutoSendTime) {
+      setTimerInterval(parseInt(localAutoSendTime));
+    }
+
+    const localSendColor = localStorage.getItem('sendColor');
+    if (localSendColor) {
+      setColor(localSendColor);
+    }
+
+    const localAutoFrameTime = localStorage.getItem('autoFrameTime');
+    if (localAutoFrameTime) {
+      setAutoFrameTime(parseInt(localAutoFrameTime));
+      auto_frame_time_ref.current = parseInt(localAutoFrameTime);
+    }
 
     const setupListeners = async () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
@@ -650,10 +667,10 @@ const SerialDebugger: React.FC = () => {
                 <InputNumber<number>
                   min={1}
                   size="small"
-                  defaultValue={10}
+                  value={auto_frame_time}
                   parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
                   changeOnWheel
-                  onChange={(value) => { auto_frame_time_ref.current = value || 10 }}
+                  onChange={(value) => { auto_frame_time_ref.current = value || 10; localStorage.setItem('autoFrameTime', (value || 10).toString()); setAutoFrameTime(value || 10) }}
                 />
               </div>
 
@@ -674,10 +691,10 @@ const SerialDebugger: React.FC = () => {
                 <InputNumber<number>
                   min={1}
                   size="small"
-                  defaultValue={1000}
+                  value={timerInterval / 100}
                   formatter={formatter}
                   parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
-                  onChange={(value) => { setTimerInterval((value || 1000) * 100); }}
+                  onChange={(value) => { setTimerInterval((value || 1000) * 100); localStorage.setItem('autoSendTime', ((value || 1000) * 100).toString()) }}
                   changeOnWheel
                 />
               </div>
@@ -687,7 +704,7 @@ const SerialDebugger: React.FC = () => {
                 </Checkbox>
                 <ColorPicker
                   value={color}
-                  onChange={(color) => setColor(color.toHexString())}
+                  onChange={(color) => { setColor(color.toHexString()); localStorage.setItem('sendColor', color.toHexString()) }}
                   style={{ margin: '-10px 0 0 0' }}
                   size="small"
                   format="hex"
