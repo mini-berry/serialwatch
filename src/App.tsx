@@ -533,7 +533,7 @@ const SerialDebugger: React.FC = () => {
       }}>
       <div className="main-container">
         <Splitter onCollapse={collapseHandler} >
-          <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
+          <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''} ${darkMode ? 'dark' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
             <div className='left-section' onContextMenu={preventContextMenu}>
               <div className="row" style={{ paddingTop: "10px" }}>
                 <label className="label">端口名</label>
@@ -747,7 +747,7 @@ const SerialDebugger: React.FC = () => {
           </Splitter.Panel>
 
           <Splitter.Panel>
-            <div className="right-splitter">
+            <div className={`right-splitter ${darkMode ? 'dark' : ''}`} >
               {messageHolder}
               <Dropdown menu={{ items: secMenu }} trigger={['contextMenu']} open={secMenuOpen} onOpenChange={(open) => setSecMenuOpen(open)}>
                 <div className="show-section" id="show-section">

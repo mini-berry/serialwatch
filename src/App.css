@@ -11,9 +11,13 @@ body {
 
 .left-splitter {
   position: relative;
-  background-color: color-mix(in srgb, var(--ant-color-bg-base), gray 40%);
   overflow: hidden;
   min-width: 200px;
+  background-color: rgb(210, 210, 210);
+}
+
+.left-splitter.dark {
+  background-color: rgb(13, 13, 13);
 }
 
 .left-splitter.collapsed {
@@ -179,8 +183,13 @@ body {
   height: 100%;
   display: flex;
   overflow: hidden;
-  background-color: color-mix(in srgb, var(--ant-color-bg-base), gray 20%);
+  background-color: rgb(244, 244, 244);
 }
+
+.right-splitter.dark {
+  background-color: rgb(33, 33, 33);
+}
+
 
 .show-section {
   height: calc(100% - 150px);

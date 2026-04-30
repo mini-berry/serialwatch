@@ -5,7 +5,7 @@
 ## 系统支持
 
 - Ubuntu 22 及以上版本
-- Windows 7 及以上版本
+- Windows 10 及以上版本
 
 Linux需要安装libwebkit2gtk
 
