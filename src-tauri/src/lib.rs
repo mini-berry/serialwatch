@@ -91,7 +91,22 @@ async fn serial_thread(
                             .change_config(&new_config),
                     );
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    serial_port = serial_builder.unwrap().open_native_async().ok();
+                    match serial_builder.unwrap().open_native_async() {
+                        Ok(port) => {
+                            serial_port = Some(port);
+                        }
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("Failed to open serial port: {}", e);
+                            app_handle
+                                .emit("serial-failed", format!("{e}"))
+                                .unwrap_or_else(|_err| {
+                                    #[cfg(debug_assertions)]
+                                    eprintln!("Failed to send error to main thread: {_err}");
+                                });
+                            serial_port = None;
+                        }
+                    }
                 }
                 // 关闭串口
                 else {
