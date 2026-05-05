@@ -3393,7 +3393,7 @@ dependencies = [
 
 [[package]]
 name = "serialwatch"
-version = "1.0.1"
+version = "1.0.2"
 dependencies = [
  "dirs",
  "openssl-sys",
