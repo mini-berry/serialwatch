@@ -51,6 +51,7 @@ body {
   align-items: center;
   justify-content: center;
   transition: all 0.3s ease;
+  z-index: 2147483647;
 }
 
 .inner-icon {
@@ -191,6 +192,20 @@ body {
   background-color: rgb(33, 33, 33);
 }
 
+.output-div {
+  padding-left: 3px;
+  padding-right: 3px;
+  border-radius: 4px;
+  transition: background-color 0.2s ease;
+}
+
+.output-div:hover {
+  background-color: rgb(212, 212, 212);
+}
+
+.output-div.dark:hover {
+  background-color: rgb(82, 66, 66);
+}
 
 .show-section {
   height: calc(100% - 150px);

@@ -772,6 +772,7 @@ const SerialDebugger: React.FC = () => {
                     return (
                       <Dropdown key={index} menu={{ items: logMenu, onClick: (e) => handleMenuClick(e, index) }} trigger={['contextMenu']}>
                         <div
+                          className={`output-div ${darkMode ? 'dark' : ''}`}
                           key={index}
                           style={{
                             color: logLine.color,
