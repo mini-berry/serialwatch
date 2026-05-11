@@ -14,6 +14,7 @@ import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
 
 interface OutLine {
+  raw_data?: Uint8Array;
   content: string;
   color?: string;
   type: 'send' | 'receive';
@@ -27,6 +28,8 @@ interface SerialConfig {
   stop_bits: number;
   flow_control: 'None' | 'RtsCts' | 'XonXoff';
   open_status: boolean;
+  dtr: boolean;
+  rts: boolean;
 }
 interface SerialDevice {
   name: string;
@@ -34,16 +37,21 @@ interface SerialDevice {
 }
 
 const SerialDebugger: React.FC = () => {
+  // 监视local配置
   const subscribe = (onStoreChange: () => void) => {
     window.addEventListener('storage', onStoreChange);
     return () => {
       window.removeEventListener('storage', onStoreChange);
     };
   };
+
+  // local配置回调函数
   const getSnapshot = () => {
     const configString = localStorage.getItem('darkMode');
     return configString === 'true';
   };
+
+  // local配置监控启用
   const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
   // 颜色选择器
@@ -76,15 +84,24 @@ const SerialDebugger: React.FC = () => {
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
   const sendMsgRef = useRef<() => Promise<void> | void>(() => undefined);
+
+  //脚本
+  const [recv_script, setRecvScript] = useState<boolean>(false);
+  const [send_script, setSendScript] = useState<boolean>(false);
+  const [recv_script_list, setRecvScriptList] = useState<Array<string>>([]);
+  const [send_script_list, setSendScriptList] = useState<Array<string>>([]);
+  // 打开设置界面
   const openSettings = async () => {
     await invoke('open_and_activate_window');
   }
   useEffect(() => {
+    // 每当 timerRunning 或 timerInterval 变化时，重新设置定时器
     if (timerRunning) {
       timerRef.current = setInterval(() => {
         void sendMsgRef.current();
       }, timerInterval);
     }
+
     return () => {
       if (timerRef.current) {
         clearInterval(timerRef.current);
@@ -102,6 +119,8 @@ const SerialDebugger: React.FC = () => {
     stop_bits: 1,
     flow_control: 'None',
     open_status: false,
+    dtr: false,
+    rts: false,
   });
 
   useEffect(() => {
@@ -173,20 +192,33 @@ const SerialDebugger: React.FC = () => {
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
         setNeedScroll(nowOnBottom);
         setReceiveCount((prev) => prev + uint8Data.length);
+        setReceiveText((prev) => {
+          if (prev.length > 1000) {
+            return prev.slice(prev.length - 1000);
+          }
+          if (prev.length > 0 && prev[prev.length - 1].content.length > 10000) {
+            const safeContent = prev[prev.length - 1].content.slice(-5000);
+            const newRawData = new TextEncoder().encode(safeContent);
+            return [
+              {
+                type: prev[prev.length - 1].type,
+                color: prev[prev.length - 1].color,
+                raw_data: newRawData,
+                content: safeContent
+              }
+            ];
+          }
+          return prev;
+        });
         // 关闭十六进制显示
         if (!hex_show_ref.current) {
-          const textDecoder = new TextDecoder();
-          const decodedText = textDecoder.decode(uint8Data);
           setReceiveText((prev) => {
-            if (auto_frame_ref.current && frame_break) {
-              return appendReceiveLine(prev, decodedText, {
-                prefixSendTag: show_send_message_ref.current,
-              });
+            // 上一行是接收数据，且未开启自动断帧或未超时，则合并到上一行
+            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              return appendReceiveLine(prev, uint8Data, { mergePrevious: true });
             }
-            if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-              return appendReceiveLine(prev, decodedText, { mergePrevious: true });
-            }
-            return appendReceiveLine(prev, decodedText, {
+
+            return appendReceiveLine(prev, uint8Data, {
               prefixSendTag: show_send_message_ref.current,
             });
           });
@@ -197,18 +229,12 @@ const SerialDebugger: React.FC = () => {
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join(' ').toUpperCase();
           setReceiveText((prev) => {
-            if (auto_frame_ref.current && frame_break) {
-              return appendReceiveLine(prev, hexString, {
-                prefixSendTag: show_send_message_ref.current,
-              });
-            }
-            if (prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-              return appendReceiveLine(prev, hexString, {
+            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              return appendHexReceiveLine(prev, hexString, uint8Data, {
                 mergePrevious: true,
-                separator: ' ',
               });
             }
-            return appendReceiveLine(prev, hexString, { prefixSendTag: true });
+            return appendHexReceiveLine(prev, hexString, uint8Data, { prefixSendTag: show_send_message_ref.current });
           });
         };
         if (auto_frame_ref.current) {
@@ -254,33 +280,69 @@ const SerialDebugger: React.FC = () => {
 
   const appendReceiveLine = (
     prev: OutLine[],
-    content: string,
+    data: Uint8Array,
     options?: {
       mergePrevious?: boolean;
-      separator?: string;
       prefixSendTag?: boolean;
     }
   ): OutLine[] => {
-    const { mergePrevious = false, separator = '', prefixSendTag = false } = options ?? {};
+    const { mergePrevious = false, prefixSendTag = false } = options ?? {};
 
-    if (mergePrevious && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-      const lastLine = prev[prev.length - 1];
+    if (mergePrevious) {
+      const prevLast = prev[prev.length - 1];
+      // 提前计算合并后的 raw_data，避免重复写代码
+      const mergedRawData = prevLast.raw_data
+        ? new Uint8Array([...prevLast.raw_data, ...data])
+        : data;
+
       return [
         ...prev.slice(0, -1),
         {
-          ...lastLine,
-          content: lastLine.content + separator + content,
-        },
+          ...prevLast,
+          raw_data: mergedRawData,
+          // 加上括号修复优先级问题
+          content: (prefixSendTag ? '> ' : '') + new TextDecoder().decode(mergedRawData)
+        }
+      ];
+    } else {
+      return [
+        ...prev,
+        {
+          raw_data: data,
+          // 这里同样加上括号，并且补充了 type 字段
+          content: (prefixSendTag ? '> ' : '') + new TextDecoder().decode(data),
+          type: 'receive'
+        }
       ];
     }
+  };
 
-    return [
-      ...prev,
+  const appendHexReceiveLine = (
+    prev: OutLine[],
+    hexString: string,
+    raw_data: Uint8Array,
+    options?: {
+      mergePrevious?: boolean;
+      prefixSendTag?: boolean;
+    }
+  ): OutLine[] => {
+    const { mergePrevious = false, prefixSendTag = false } = options ?? {};
+    if (mergePrevious)
+      return [...prev.slice(0, -1),
       {
-        content: `${prefixSendTag ? '> ' : ''}${content}`,
-        type: 'receive' as const,
-      },
-    ];
+        ...prev[prev.length - 1],
+        raw_data: prev[prev.length - 1].raw_data
+          ? new Uint8Array([...prev[prev.length - 1].raw_data!, ...raw_data])
+          : raw_data,
+        content: (prev[prev.length - 1].content || '') + ' ' + hexString
+      }];
+    else
+      return [...prev,
+      {
+        raw_data: raw_data,
+        content: (prefixSendTag ? '> ' : '') + hexString,
+        type: 'receive'
+      }];
   };
 
   const send_message_display = (msg: string) => {
@@ -403,8 +465,7 @@ const SerialDebugger: React.FC = () => {
       if (show_send_message_ref.current && data.length > 0) {
         send_message_display(send_data);
       }
-      if (serial_config.open_status)
-        setSendCount((prev) => prev + data.length);
+      setSendCount((prev) => prev + data.length);
       await invoke('send_msg', { msg: data });
     }
     else {
@@ -426,8 +487,7 @@ const SerialDebugger: React.FC = () => {
           send_message_display(displayString);
         }
       }
-      if (serial_config.open_status)
-        setSendCount((prev) => prev + uint8Array.length);
+      setSendCount((prev) => prev + uint8Array.length);
       await invoke('send_msg', { msg: uint8Array });
     }
   };
@@ -636,6 +696,7 @@ const SerialDebugger: React.FC = () => {
                   ]}
                 />
               </div>
+
               <div className="button-row">
                 <Radio.Group size="small" buttonStyle="solid" block value={serial_config.flow_control} onChange={(e) => { config_change('flow_control', e.target.value) }}>
                   <Radio.Button value="None" >关闭</Radio.Button>
@@ -644,6 +705,14 @@ const SerialDebugger: React.FC = () => {
                 </Radio.Group>
               </div>
 
+              {serial_config.flow_control === 'RtsCts' && <div className="little-button-row" >
+                <Button className="little-button" type={serial_config.dtr ? 'primary' : 'default'} onClick={() => config_change('dtr', !serial_config.dtr)}>
+                  DTR
+                </Button>
+                <Button className="little-button" type={serial_config.rts ? 'primary' : 'default'} onClick={() => config_change('rts', !serial_config.rts)}>
+                  RTS
+                </Button>
+              </div>}
               <div className="open-row">
                 <Button className="open-button" color={serial_config.open_status ? 'red' : 'blue'} variant="solid" onClick={open_serial}>
                   {serial_config.open_status ? '关闭' : '打开'}
@@ -673,7 +742,12 @@ const SerialDebugger: React.FC = () => {
                   onChange={(value) => { auto_frame_time_ref.current = value || 10; localStorage.setItem('autoFrameTime', (value || 10).toString()); setAutoFrameTime(value || 10) }}
                 />
               </div>
-
+              <div className="checkbox_withinput-row">
+                <Checkbox checked={recv_script} onChange={(e) => { setRecvScript(e.target.checked) }}>
+                  脚本
+                </Checkbox>
+                <Select options={[]} />
+              </div>
               <Divider size="small" />
 
               <div>
@@ -698,7 +772,7 @@ const SerialDebugger: React.FC = () => {
                   changeOnWheel
                 />
               </div>
-              <div className="checkbox-row">
+              <div className="checkbox-row last-row">
                 <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
                   显示发送字符串
                 </Checkbox>
@@ -763,7 +837,7 @@ const SerialDebugger: React.FC = () => {
             </div>
           </Splitter.Panel>
 
-          <Splitter.Panel>
+          <Splitter.Panel style={{ "minWidth": "110px" }}>
             <div className={`right-splitter ${darkMode ? 'dark' : ''}`} >
               {messageHolder}
               <Dropdown menu={{ items: secMenu }} trigger={['contextMenu']} open={secMenuOpen} onOpenChange={(open) => setSecMenuOpen(open)}>

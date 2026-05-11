@@ -17,6 +17,8 @@ pub struct SerialConfig {
     pub baud: u32,
     pub flow_control: FlowControl,
     pub open_status: bool,
+    pub dtr: bool,
+    pub rts: bool,
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
@@ -50,6 +52,8 @@ impl Default for SerialConfig {
             flow_control: FlowControl::None,
             port: String::new(),
             open_status: false,
+            dtr: false,
+            rts: false,
         }
     }
 }

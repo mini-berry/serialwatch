@@ -8,6 +8,7 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio_serial::ClearBuffer;
 use tokio_serial::{SerialPort, SerialPortBuilderExt};
+mod js;
 
 mod config;
 #[allow(dead_code)]
@@ -27,6 +28,7 @@ struct SerialDevice {
 struct MsgSenderState {
     sender: Arc<Sender<Vec<u8>>>,
 }
+
 #[derive(Debug, Clone)]
 struct ConfigSenderState {
     sender: Arc<Sender<config::SerialConfig>>,
@@ -72,6 +74,8 @@ async fn serial_thread(
     app_handle: tauri::AppHandle,
 ) {
     let mut serial_port: Option<tokio_serial::SerialStream> = None;
+    let mut data_buffer: Vec<u8> = Vec::new();
+    let mut last_receive_time = std::time::Instant::now();
 
     loop {
         let config_updater = config_receiver.try_recv();
@@ -91,10 +95,27 @@ async fn serial_thread(
                         tokio_serial::new(new_config.port.clone(), new_config.baud)
                             .change_config(&new_config),
                     );
+
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
                     match serial_builder.unwrap().open_native_async() {
                         Ok(port) => {
                             serial_port = Some(port);
+                            if new_config.dtr {
+                                if let Some(port) = serial_port.as_mut() {
+                                    if let Err(_err) = port.write_data_terminal_ready(true) {
+                                        #[cfg(debug_assertions)]
+                                        eprintln!("Failed to set DTR: {}", _err);
+                                    }
+                                }
+                            }
+                            if new_config.rts {
+                                if let Some(port) = serial_port.as_mut() {
+                                    if let Err(_err) = port.write_request_to_send(true) {
+                                        #[cfg(debug_assertions)]
+                                        eprintln!("Failed to set RTS: {}", _err);
+                                    }
+                                }
+                            }
                         }
                         Err(e) => {
                             #[cfg(debug_assertions)]
@@ -142,12 +163,8 @@ async fn serial_thread(
                         match serial_result {
                             Ok(n) if n > 0 => {
                                 let received_data = &storage [..n];
-                                #[cfg(debug_assertions)]
-                                println!("Received msg: {:?}", received_data);
-                                app_handle.emit("data-updated", received_data.to_vec()).unwrap_or_else(|_err| {
-                                    #[cfg(debug_assertions)]
-                                    eprintln!("Failed to emit data to frontend: {_err}");
-                                });
+                                data_buffer.extend_from_slice(received_data);
+                                last_receive_time = std::time::Instant::now();
                             }
                             Err(e) => {
                                 #[cfg(debug_assertions)]
@@ -230,7 +247,22 @@ async fn serial_thread(
                 break;
             }
         }
-        tokio::time::sleep(std::time::Duration::from_millis(10)).await;
+
+        if data_buffer.len() > 100
+            || (last_receive_time.elapsed() > std::time::Duration::from_millis(40)
+                && !data_buffer.is_empty())
+        {
+            #[cfg(debug_assertions)]
+            println!("Emitting data to frontend: {} bytes", data_buffer.len());
+            app_handle
+                .emit("data-updated", data_buffer.clone())
+                .unwrap_or_else(|_err| {
+                    #[cfg(debug_assertions)]
+                    eprintln!("Failed to emit data to frontend: {_err}");
+                });
+            data_buffer.clear();
+        }
+        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
     }
     #[cfg(debug_assertions)]
     eprintln!("Serial thread exiting.");

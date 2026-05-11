@@ -41,3 +41,17 @@ sudo dnf install webkit2gtk4.1-devel
 ## 截图
 
 ![screenshot](./screenshot.png)
+
+## Q&A
+
+**Q: 为什么当我关闭十六进制显示时，之前以十六进制显示的数据也会改变为ascii显示？**
+
+> **A**: 为了正确处理UTF8（多字节文本）数据，助手会自动合并之前的数据
+
+**Q: 为什么不提供Mac客户端**
+
+> **A**: 因为我没有Mac
+
+**Q: 如何自己编译**
+
+> **A**: 安装rustup,bun后，使用bun install和bun tauri build编译。您可能还需要配置tauri工具链，参考tauri的Prerequisites
