@@ -62,7 +62,9 @@ pub fn run() {
             update_config,
             send_msg,
             open_and_activate_window,
-            close_window
+            close_window,
+            load_script_config,
+            update_script_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -440,4 +442,14 @@ async fn close_window(app_handle: tauri::AppHandle) {
     if let Some(window) = app_handle.get_webview_window("settings") {
         window.close().unwrap();
     }
+}
+
+#[tauri::command]
+async fn load_script_config() -> Result<config::ScriptConfig, String> {
+    config::ScriptConfig::load()
+}
+
+#[tauri::command]
+async fn update_script_config(new_config: config::ScriptConfig) -> Result<(), String> {
+    config::ScriptConfig::save(new_config)
 }

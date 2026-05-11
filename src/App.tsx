@@ -3,7 +3,7 @@ import { ConfigProvider, theme } from 'antd';
 import { useSyncExternalStore } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown, Radio } from 'antd';
-import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined } from '@ant-design/icons';
+import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
@@ -35,7 +35,10 @@ interface SerialDevice {
   name: string;
   port: string;
 }
-
+interface ScriptConfig {
+  recv_script: [string, string][];
+  send_script: [string, string][];
+}
 const SerialDebugger: React.FC = () => {
   // 监视local配置
   const subscribe = (onStoreChange: () => void) => {
@@ -85,11 +88,23 @@ const SerialDebugger: React.FC = () => {
   const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
   const sendMsgRef = useRef<() => Promise<void> | void>(() => undefined);
 
+  // 串口配置
+  const [serial_config, setSerialConfig] = useState<SerialConfig>({
+    port: '',
+    baud: 9600,
+    data_bits: 8,
+    parity: 'None',
+    stop_bits: 1,
+    flow_control: 'None',
+    open_status: false,
+    dtr: false,
+    rts: false,
+  });
+
   //脚本
   const [recv_script, setRecvScript] = useState<boolean>(false);
   const [send_script, setSendScript] = useState<boolean>(false);
-  const [recv_script_list, setRecvScriptList] = useState<Array<string>>([]);
-  const [send_script_list, setSendScriptList] = useState<Array<string>>([]);
+  const [script_config, setScriptConfig] = useState<ScriptConfig>({ recv_script: [], send_script: [] });
   // 打开设置界面
   const openSettings = async () => {
     await invoke('open_and_activate_window');
@@ -109,19 +124,6 @@ const SerialDebugger: React.FC = () => {
       }
     };
   }, [timerRunning, timerInterval]);
-
-  // 串口配置
-  const [serial_config, setSerialConfig] = useState<SerialConfig>({
-    port: '',
-    baud: 9600,
-    data_bits: 8,
-    parity: 'None',
-    stop_bits: 1,
-    flow_control: 'None',
-    open_status: false,
-    dtr: false,
-    rts: false,
-  });
 
   useEffect(() => {
     if (need_scroll) {
@@ -165,6 +167,11 @@ const SerialDebugger: React.FC = () => {
           setSerialConfig(newConfig);
         }
       }
+    });
+
+    invoke('load_script_config').then((scripts) => {
+      let scriptsConfig = scripts as ScriptConfig;
+      setScriptConfig(scriptsConfig);
     });
 
     const localAutoSendTime = localStorage.getItem('autoSendTime');
@@ -735,6 +742,7 @@ const SerialDebugger: React.FC = () => {
                 </Checkbox>
                 <InputNumber<number>
                   min={1}
+                  step={100}
                   size="small"
                   value={auto_frame_time}
                   parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
@@ -746,7 +754,12 @@ const SerialDebugger: React.FC = () => {
                 <Checkbox checked={recv_script} onChange={(e) => { setRecvScript(e.target.checked) }}>
                   脚本
                 </Checkbox>
-                <Select options={[]} />
+                <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
+                  setScriptConfig(scripts as ScriptConfig);
+                })} />
+                <Button className='edit-button'>
+                  <EditOutlined />
+                </Button>
               </div>
               <Divider size="small" />
 
@@ -772,7 +785,7 @@ const SerialDebugger: React.FC = () => {
                   changeOnWheel
                 />
               </div>
-              <div className="checkbox-row last-row">
+              <div className="checkbox-row">
                 <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
                   显示发送字符串
                 </Checkbox>
@@ -822,10 +835,21 @@ const SerialDebugger: React.FC = () => {
                   ]}
                 />
               </div>
+              <div className="checkbox_withinput-row">
+                <Checkbox checked={recv_script} onChange={(e) => { setRecvScript(e.target.checked) }}>
+                  脚本
+                </Checkbox>
+                <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
+                  setScriptConfig(scripts as ScriptConfig);
+                })} />
+                <Button className='edit-button'>
+                  <EditOutlined />
+                </Button>
+              </div>
               {/* <div className="checkbox-row">
               <Checkbox>自动重连</Checkbox>
             </div> */}
-              <div style={{ height: "30px" }}></div>
+              <div style={{ height: "27px" }}></div>
             </div>
             <div className="bottom-bar" onContextMenu={preventContextMenu}>
               <div className='inner-icon' onClick={clean_output}>

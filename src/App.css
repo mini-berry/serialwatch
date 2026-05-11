@@ -126,6 +126,7 @@ body {
   white-space: nowrap;
   overflow: hidden;
   text-overflow: ellipsis;
+  height: 27px;
 }
 
 .button-row {
@@ -169,19 +170,15 @@ body {
 }
 
 .checkbox-row {
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   margin-left: 10px;
-}
-
-.last-row {
-  margin-bottom: 3px;
 }
 
 .checkbox_withinput-row {
   display: flex;
   align-items: center;
   /* 添加间距 */
-  margin-bottom: 10px;
+  margin-bottom: 8px;
   margin-left: 10px;
   margin-right: 10px;
 }
@@ -196,6 +193,8 @@ body {
 .checkbox_withinput-row .ant-input-number {
   flex: 1;
   min-width: 0;
+  height: 22px;
+  border-radius: 3px;
 }
 
 .right-splitter {
@@ -292,4 +291,20 @@ body {
   align-items: center;
   justify-content: right;
   border-top: 1px solid var(--ant-color-border);
+}
+
+.script-select {
+  height: 22px;
+  flex: 1;
+  border-radius: 3px;
+  white-space: nowrap;
+  overflow: hidden;
+  text-overflow: ellipsis;
+}
+
+.edit-button {
+  height: 22px;
+  border-radius: 3px;
+  padding: 0px 6px;
+  margin-left: 3px;
 }

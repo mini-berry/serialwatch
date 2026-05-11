@@ -22,17 +22,9 @@ pub struct SerialConfig {
 }
 
 #[derive(Debug, Serialize, Deserialize, Clone)]
-pub struct SaveConfig {}
-
-impl PartialEq for SerialConfig {
-    fn eq(&self, other: &Self) -> bool {
-        self.port == other.port
-            && self.data_bits == other.data_bits
-            && self.stop_bits == other.stop_bits
-            && self.parity == other.parity
-            && self.baud == other.baud
-            && self.flow_control == other.flow_control
-    }
+pub struct ScriptConfig {
+    pub recv_script: Vec<(String, String)>,
+    pub send_script: Vec<(String, String)>,
 }
 
 #[derive(Debug, Serialize, Clone, Deserialize, PartialEq)]
@@ -58,10 +50,15 @@ impl Default for SerialConfig {
     }
 }
 
-impl SerialConfig {
+impl PartialEq for ScriptConfig {
+    fn eq(&self, other: &Self) -> bool {
+        self.recv_script == other.recv_script && self.send_script == other.send_script
+    }
+}
+
+impl ScriptConfig {
     // 获取配置文件路径（跨平台）
-    #[allow(dead_code)]
-    pub fn get_config_path() -> Result<PathBuf, String> {
+    fn get_config_path() -> Result<PathBuf, String> {
         let mut config_path = if cfg!(target_os = "windows") {
             // Windows: 使用 AppData/Roaming
             dirs::config_dir()
@@ -84,7 +81,6 @@ impl SerialConfig {
     }
 
     // 加载配置文件
-    #[allow(dead_code)]
     pub fn load() -> Result<Self, String> {
         let config_path = Self::get_config_path()?;
 
@@ -93,41 +89,32 @@ impl SerialConfig {
             let content =
                 fs::read_to_string(&config_path).map_err(|_| "Failed to read config file")?;
 
-            let config: SerialConfig =
+            let config: ScriptConfig =
                 toml::from_str(&content).map_err(|_| "Failed to parse config file")?;
 
             Ok(config)
         } else {
             // 配置文件不存在，创建默认配置
-            let default_config = SerialConfig::default();
-            default_config.save()?;
+            let default_config = ScriptConfig {
+                recv_script: Vec::new(),
+                send_script: Vec::new(),
+            };
+            ScriptConfig::save(default_config.clone())?;
             Ok(default_config)
         }
     }
 
     // 保存配置文件
-    #[allow(dead_code)]
-    pub fn save(&self) -> Result<(), String> {
+    pub fn save(script: ScriptConfig) -> Result<(), String> {
         let config_path = Self::get_config_path()?;
 
-        let save_config = SaveConfig {};
         // 序列化为 TOML 格式
-        let toml_content = toml::to_string_pretty(&save_config)
-            .map_err(|_| "Failed to serialize config to TOML")?;
+        let toml_content =
+            toml::to_string_pretty(&script).map_err(|_| "Failed to serialize config to TOML")?;
 
         // 写入文件
         fs::write(&config_path, toml_content).map_err(|_| "Failed to write config file")?;
 
-        Ok(())
-    }
-
-    // 更新配置
-    #[allow(dead_code)]
-    pub fn update(&mut self, config: SerialConfig) -> Result<(), String> {
-        if *self != config {
-            *self = config;
-            let _ = self.save()?; // 保存更新后的配置
-        }
         Ok(())
     }
 }
@@ -137,20 +124,25 @@ mod tests {
     use super::*;
 
     #[test]
-    fn test_config_load_and_save() {
-        // 创建一个临时配置
-        let mut config = SerialConfig::default();
-        config.port = "COM3".to_string();
-        config.baud = 115200;
-        config.parity = CheckBit::Even;
+    fn test_script_config_save_and_load() {
+        let test_config = ScriptConfig {
+            recv_script: vec![
+                ("Recv Script 1".to_string(), "recv_script_1".to_string()),
+                ("Recv Script 2".to_string(), "recv_script_2".to_string()),
+            ],
+            send_script: vec![
+                ("Send Script 1".to_string(), "send_script_1".to_string()),
+                ("Send Script 2".to_string(), "send_script_2".to_string()),
+            ],
+        };
 
         // 保存配置
-        assert!(config.save().is_ok());
+        ScriptConfig::save(test_config.clone()).expect("Failed to save config");
 
         // 加载配置
-        let loaded_config = SerialConfig::load().expect("Failed to load config");
+        let loaded_config = ScriptConfig::load().expect("Failed to load config");
 
         // 验证加载的配置与原始配置相同
-        assert_eq!(config, loaded_config);
+        assert_eq!(test_config, loaded_config);
     }
 }
