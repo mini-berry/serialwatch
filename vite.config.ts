@@ -12,6 +12,7 @@ export default defineConfig(async () => ({
       input: {
         main: resolve(__dirname, 'index.html'),
         about: resolve(__dirname, 'settings.html'), // Register secondary pages here
+        editor: resolve(__dirname, 'editor.html')
       },
     },
   },

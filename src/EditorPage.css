@@ -1,0 +1,30 @@
+body {
+    margin: 0;
+    padding: 0;
+}
+
+.main-container {
+    height: 100vh;
+    width: 100vw;
+}
+
+.main-layout {
+    height: 100%;
+    width: 100%;
+}
+
+.header {
+    height: 40px;
+    width: 100%;
+}
+
+.content {
+    height: 100%;
+    width: 100%;
+}
+
+.coder {
+    height: 100%;
+    width: 50px;
+    overflow: auto;
+}

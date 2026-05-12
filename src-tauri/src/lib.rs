@@ -8,7 +8,6 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio_serial::ClearBuffer;
 use tokio_serial::{SerialPort, SerialPortBuilderExt};
-mod js;
 
 mod config;
 #[allow(dead_code)]
@@ -61,8 +60,10 @@ pub fn run() {
             scan_serial,
             update_config,
             send_msg,
-            open_and_activate_window,
-            close_window,
+            open_and_activate_about,
+            close_about,
+            open_and_activate_editor,
+            close_editor,
             load_script_config,
             update_script_config
         ])
@@ -410,7 +411,7 @@ impl Config for tokio_serial::SerialPortBuilder {
 }
 
 #[tauri::command]
-async fn open_and_activate_window(
+async fn open_and_activate_about(
     app_handle: tauri::AppHandle,
     webview_window: tauri::WebviewWindow,
 ) {
@@ -438,8 +439,37 @@ async fn open_and_activate_window(
 }
 
 #[tauri::command]
-async fn close_window(app_handle: tauri::AppHandle) {
+async fn open_and_activate_editor(app_handle: tauri::AppHandle) {
+    // 1. 尝试获取已存在的窗口，避免重复创建
+    if let Some(window) = app_handle.get_webview_window("editor") {
+        // 如果窗口存在，则激活它
+        window.set_focus().unwrap();
+        window.show().unwrap();
+        return;
+    }
+
+    // 2. 如果窗口不存在，则创建并激活
+    let _window = tauri::WebviewWindowBuilder::new(
+        &app_handle,
+        "editor",
+        tauri::WebviewUrl::App("editor.html".into()),
+    )
+    .title("脚本编辑器")
+    .inner_size(800.0, 600.0)
+    .center()
+    .build();
+}
+
+#[tauri::command]
+async fn close_about(app_handle: tauri::AppHandle) {
     if let Some(window) = app_handle.get_webview_window("settings") {
+        window.close().unwrap();
+    }
+}
+
+#[tauri::command]
+async fn close_editor(app_handle: tauri::AppHandle) {
+    if let Some(window) = app_handle.get_webview_window("editor") {
         window.close().unwrap();
     }
 }

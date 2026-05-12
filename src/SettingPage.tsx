@@ -25,7 +25,7 @@ const SettingPage: React.FC = () => {
     }
 
     const onClose = async () => {
-        invoke('close_window');
+        invoke('close_about');
     };
     useEffect(() => {
         const darkMode = localStorage.getItem('darkMode');

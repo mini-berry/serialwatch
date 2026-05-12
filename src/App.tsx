@@ -107,7 +107,10 @@ const SerialDebugger: React.FC = () => {
   const [script_config, setScriptConfig] = useState<ScriptConfig>({ recv_script: [], send_script: [] });
   // 打开设置界面
   const openSettings = async () => {
-    await invoke('open_and_activate_window');
+    await invoke('open_and_activate_about');
+  }
+  const openEditor = async () => {
+    await invoke('open_and_activate_editor');
   }
   useEffect(() => {
     // 每当 timerRunning 或 timerInterval 变化时，重新设置定时器
@@ -757,7 +760,7 @@ const SerialDebugger: React.FC = () => {
                 <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
                 })} />
-                <Button className='edit-button'>
+                <Button className='edit-button' onClick={openEditor}>
                   <EditOutlined />
                 </Button>
               </div>
@@ -842,7 +845,7 @@ const SerialDebugger: React.FC = () => {
                 <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
                 })} />
-                <Button className='edit-button'>
+                <Button className='edit-button' onClick={openEditor}>
                   <EditOutlined />
                 </Button>
               </div>
