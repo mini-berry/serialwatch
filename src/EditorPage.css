@@ -1,6 +1,8 @@
 body {
     margin: 0;
     padding: 0;
+    overflow: hidden;
+    /* 防止出现双滚动条 */
 }
 
 .main-container {
@@ -15,16 +17,23 @@ body {
 
 .header {
     height: 40px;
-    width: 100%;
+    padding: 0 16px;
 }
 
 .content {
     height: 100%;
-    width: 100%;
+    overflow: hidden;
 }
 
-.coder {
+.coder-mirror-container {
     height: 100%;
-    width: 50px;
-    overflow: auto;
+    font-size: 14px;
+    border: 1px solid #040101;
+}
+
+.sider-menu {
+    overflow-y: auto;
+    height: 100%;
+    scrollbar-width: none;
+    border-right: 0;
 }

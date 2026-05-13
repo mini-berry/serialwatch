@@ -173,7 +173,7 @@ const SerialDebugger: React.FC = () => {
     });
 
     invoke('load_script_config').then((scripts) => {
-      let scriptsConfig = scripts as ScriptConfig;
+      let scriptsConfig = scripts as ScriptConfig || { recv_script: [], send_script: [] };
       setScriptConfig(scriptsConfig);
     });
 

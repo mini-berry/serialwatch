@@ -18,6 +18,14 @@ const items: MenuProps['items'] = [{
 }];
 
 const SettingPage: React.FC = () => {
+    useEffect(() => {
+        const darkMode = localStorage.getItem('darkMode');
+        if (darkMode === 'true') {
+            document.body.classList.add('dark-mode');
+        } else {
+            document.body.classList.remove('dark-mode');
+        }
+    }, []);
     const [currentKey, setCurrentKey] = useState('1');
     const [darkMode, setDarkMode] = useState(localStorage.getItem('darkMode') === 'true');
     const handleOpen = async (url: string) => {
@@ -27,14 +35,6 @@ const SettingPage: React.FC = () => {
     const onClose = async () => {
         invoke('close_about');
     };
-    useEffect(() => {
-        const darkMode = localStorage.getItem('darkMode');
-        if (darkMode === 'true') {
-            document.body.classList.add('dark-mode');
-        } else {
-            document.body.classList.remove('dark-mode');
-        }
-    }, []);
 
     const onChangeDarkMode = (checked: boolean) => {
         setDarkMode(checked);
