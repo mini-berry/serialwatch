@@ -481,5 +481,5 @@ async fn load_script_config() -> Result<config::ScriptConfig, String> {
 
 #[tauri::command]
 async fn update_script_config(new_config: config::ScriptConfig) -> Result<(), String> {
-    config::ScriptConfig::save(new_config)
+    config::ScriptConfig::save(&new_config)
 }

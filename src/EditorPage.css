@@ -15,11 +15,6 @@ body {
     width: 100%;
 }
 
-.header {
-    height: 40px;
-    padding: 0 16px;
-}
-
 .content {
     height: 100%;
     overflow: hidden;
@@ -28,12 +23,32 @@ body {
 .coder-mirror-container {
     height: 100%;
     font-size: 14px;
-    border: 1px solid #040101;
 }
 
 .sider-menu {
     overflow-y: auto;
     height: 100%;
     scrollbar-width: none;
-    border-right: 0;
+}
+
+.header {
+    height: 50px;
+    padding: 0;
+    display: flex;
+    align-items: center;
+    gap: 10px;
+}
+
+.all-button {
+    height: 30px;
+    width: 30px;
+}
+
+/* 水晶风的“+”按钮 */
+.new-button {
+    width: 180px;
+    height: 50px;
+    margin: 0px;
+    border-radius: 0;
+    flex-shrink: 0;
 }

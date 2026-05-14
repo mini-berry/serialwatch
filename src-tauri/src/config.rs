@@ -89,9 +89,11 @@ impl ScriptConfig {
             let content =
                 fs::read_to_string(&config_path).map_err(|_| "Failed to read config file")?;
 
-            let config: ScriptConfig =
+            let mut config: ScriptConfig =
                 toml::from_str(&content).map_err(|_| "Failed to parse config file")?;
 
+            config.remove_same_name_script();
+            config.limit_script_number();
             Ok(config)
         } else {
             // 配置文件不存在，创建默认配置
@@ -99,13 +101,39 @@ impl ScriptConfig {
                 recv_script: Vec::new(),
                 send_script: Vec::new(),
             };
-            ScriptConfig::save(default_config.clone())?;
+            ScriptConfig::save(&default_config)?;
             Ok(default_config)
         }
     }
 
+    fn remove_same_name_script(&mut self) {
+        let dedup_by_name = |scripts: &mut Vec<(String, String)>| {
+            let mut seen_names = std::collections::HashSet::new();
+            scripts.retain(|(name, _)| {
+                // 只有当 name 不在集合中时，才将其插入并保留该元素
+                seen_names.insert(name.clone())
+            });
+        };
+
+        dedup_by_name(&mut self.recv_script);
+        dedup_by_name(&mut self.send_script);
+        self.recv_script.sort_by(|a, b| a.0.cmp(&b.0));
+        self.send_script.sort_by(|a, b| a.0.cmp(&b.0));
+    }
+
+    fn limit_script_number(&mut self) {
+        if self.recv_script.len() > 20 {
+            self.recv_script.truncate(20);
+        }
+        if self.send_script.len() > 20 {
+            self.send_script.truncate(20);
+        }
+    }
     // 保存配置文件
-    pub fn save(script: ScriptConfig) -> Result<(), String> {
+    pub fn save(script: &ScriptConfig) -> Result<(), String> {
+        let mut script = script.clone();
+        script.remove_same_name_script();
+        script.limit_script_number();
         let config_path = Self::get_config_path()?;
 
         // 序列化为 TOML 格式
@@ -125,7 +153,7 @@ mod tests {
 
     #[test]
     fn test_script_config_save_and_load() {
-        let test_config = ScriptConfig {
+        let mut test_config = ScriptConfig {
             recv_script: vec![
                 ("Recv Script 1".to_string(), "recv_script_1".to_string()),
                 ("Recv Script 2".to_string(), "recv_script_2".to_string()),
@@ -137,7 +165,7 @@ mod tests {
         };
 
         // 保存配置
-        ScriptConfig::save(test_config.clone()).expect("Failed to save config");
+        ScriptConfig::save(&mut test_config).expect("Failed to save config");
 
         // 加载配置
         let loaded_config = ScriptConfig::load().expect("Failed to load config");

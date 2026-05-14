@@ -3,8 +3,8 @@ import CodeMirror from "@uiw/react-codemirror";
 import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
 import { javascript } from "@codemirror/lang-javascript"; // 建议引入语言包以启用高亮
 import React from "react";
-import { UpOutlined, DownOutlined } from "@ant-design/icons";
-import { Layout, ConfigProvider, theme, Menu, Dropdown } from "antd";
+import { UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { Layout, ConfigProvider, theme, Menu, Dropdown, Button } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
 import { useEffect, useMemo } from "react";
@@ -27,8 +27,8 @@ const EditorPage: React.FC = () => {
         });
     }, []);
     const contextItems: MenuProps['items'] = [
-        { key: '1', label: '打开' },
-        { key: '2', label: '删除' },
+        { key: '1', label: '编辑', icon: <EditOutlined /> },
+        { key: '2', label: '删除', icon: <DeleteOutlined /> },
     ]
     const items: MenuProps['items'] = useMemo(() => [
         {
@@ -84,18 +84,37 @@ const EditorPage: React.FC = () => {
             }}>
             <div className="main-container">
                 <Layout className="main-layout">
-                    <Layout.Sider width="180" className="sider">
-                        <Menu
-                            className="sider-menu"
-                            defaultSelectedKeys={['1']}
-                            defaultOpenKeys={['recv', 'send']}
-                            mode="inline"
-                            items={items}
-                            onContextMenu={(e) => { console.log(e.target); e.preventDefault(); e.stopPropagation() }}
-                        />
-                    </Layout.Sider>
+                    <Layout.Header className="header">
+                        <Button type="primary" className="new-button">
+                            <PlusSquareOutlined /> 新建脚本
+                        </Button>
+                        <Button className="all-button">
+                            <SaveOutlined />
+                        </Button>
+                        <Button className="all-button">
+                            <CopyOutlined />
+                        </Button>
+                        <Button className="all-button">
+                            <ScissorOutlined />
+                        </Button>
+                        <Button className="all-button">
+                            <SnippetsOutlined />
+                        </Button>
+                        <Button className="all-button">
+                            <FormatPainterOutlined />
+                        </Button>
+                    </Layout.Header>
                     <Layout>
-                        <Layout.Header className="header" />
+                        <Layout.Sider width="180">
+                            <Menu
+                                className="sider-menu"
+                                defaultSelectedKeys={['1']}
+                                defaultOpenKeys={['recv', 'send']}
+                                mode="inline"
+                                items={items}
+                                onContextMenu={(e) => { console.log(e.target); e.preventDefault(); e.stopPropagation() }}
+                            />
+                        </Layout.Sider>
                         <Layout.Content className="content">
                             <CodeMirror
                                 value={code}
