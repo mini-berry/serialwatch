@@ -55,7 +55,11 @@ pub fn run() {
         .manage(config_state)
         .manage(msg_state)
         .plugin(tauri_plugin_opener::init())
-        .plugin(tauri_plugin_window_state::Builder::default().build())
+        .plugin(
+            tauri_plugin_window_state::Builder::default()
+                .with_denylist(&["editor", "settings"])
+                .build(),
+        )
         .invoke_handler(tauri::generate_handler![
             scan_serial,
             update_config,

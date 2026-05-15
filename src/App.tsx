@@ -144,9 +144,6 @@ const SerialDebugger: React.FC = () => {
   const [messageApi, messageHolder] = message.useMessage();
   // 初始化
   useEffect(() => {
-    let unlistenDataUpdated: (() => void) | undefined;
-    let unlistenSerialFailed: (() => void) | undefined;
-    let unlistenSerialError: (() => void) | undefined;
 
     // 扫描串口并加载配置
     invoke('scan_serial').then((devices) => {
@@ -194,84 +191,88 @@ const SerialDebugger: React.FC = () => {
       auto_frame_time_ref.current = parseInt(localAutoFrameTime);
     }
 
+    let unlistenDataUpdated: (() => void) | undefined;
+    let unlistenSerialFailed: (() => void) | undefined;
+    let unlistenSerialError: (() => void) | undefined;
+    let isMounted = [true, true, true];
     const setupListeners = async () => {
-      if (!unlistenDataUpdated)
-        unlistenDataUpdated = await listen('data-updated', (event) => {
-          const data = event.payload as Array<number>;
-          const frame_break = auto_frame_ref.current && Date.now() - last_receive_time_ref.current > auto_frame_time_ref.current;
-          const uint8Data = new Uint8Array(data);
-          const showSection = document.getElementById('show-section');
-          const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
-          setNeedScroll(nowOnBottom);
-          setReceiveCount((prev) => prev + uint8Data.length);
+      unlistenDataUpdated = await listen('data-updated', (event) => {
+        if (!isMounted[0]) return;
+        const data = event.payload as Array<number>;
+        const frame_break = auto_frame_ref.current && Date.now() - last_receive_time_ref.current > auto_frame_time_ref.current;
+        const uint8Data = new Uint8Array(data);
+        const showSection = document.getElementById('show-section');
+        const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
+        setNeedScroll(nowOnBottom);
+        setReceiveCount((prev) => prev + uint8Data.length);
+        setReceiveText((prev) => {
+          if (prev.length > 1000) {
+            return prev.slice(prev.length - 1000);
+          }
+          if (prev.length > 0 && prev[prev.length - 1].content.length > 10000) {
+            const safeContent = prev[prev.length - 1].content.slice(-5000);
+            const newRawData = new TextEncoder().encode(safeContent);
+            return [
+              {
+                type: prev[prev.length - 1].type,
+                color: prev[prev.length - 1].color,
+                raw_data: newRawData,
+                content: safeContent
+              }
+            ];
+          }
+          return prev;
+        });
+        // 关闭十六进制显示
+        if (!hex_show_ref.current) {
           setReceiveText((prev) => {
-            if (prev.length > 1000) {
-              return prev.slice(prev.length - 1000);
+            // 上一行是接收数据，且未开启自动断帧或未超时，则合并到上一行
+            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              return appendReceiveLine(prev, uint8Data, { mergePrevious: true });
             }
-            if (prev.length > 0 && prev[prev.length - 1].content.length > 10000) {
-              const safeContent = prev[prev.length - 1].content.slice(-5000);
-              const newRawData = new TextEncoder().encode(safeContent);
-              return [
-                {
-                  type: prev[prev.length - 1].type,
-                  color: prev[prev.length - 1].color,
-                  raw_data: newRawData,
-                  content: safeContent
-                }
-              ];
-            }
-            return prev;
-          });
-          // 关闭十六进制显示
-          if (!hex_show_ref.current) {
-            setReceiveText((prev) => {
-              // 上一行是接收数据，且未开启自动断帧或未超时，则合并到上一行
-              if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-                return appendReceiveLine(prev, uint8Data, { mergePrevious: true });
-              }
 
-              return appendReceiveLine(prev, uint8Data, {
-                prefixSendTag: show_send_message_ref.current,
+            return appendReceiveLine(prev, uint8Data, {
+              prefixSendTag: show_send_message_ref.current,
+            });
+          });
+        }
+        // 开启十六进制显示
+        else {
+          const hexString = Array.from(uint8Data)
+            .map((byte) => byte.toString(16).padStart(2, '0'))
+            .join(' ').toUpperCase();
+          setReceiveText((prev) => {
+            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+              return appendHexReceiveLine(prev, hexString, uint8Data, {
+                mergePrevious: true,
               });
-            });
-          }
-          // 开启十六进制显示
-          else {
-            const hexString = Array.from(uint8Data)
-              .map((byte) => byte.toString(16).padStart(2, '0'))
-              .join(' ').toUpperCase();
-            setReceiveText((prev) => {
-              if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
-                return appendHexReceiveLine(prev, hexString, uint8Data, {
-                  mergePrevious: true,
-                });
-              }
-              return appendHexReceiveLine(prev, hexString, uint8Data, { prefixSendTag: show_send_message_ref.current });
-            });
-          };
-          if (auto_frame_ref.current) {
-            last_receive_time_ref.current = Date.now();
-          }
-        });
-      if (!unlistenSerialFailed)
-        unlistenSerialFailed = await listen('serial-failed', (event) => {
-          const errorMessage = event.payload as string;
-          setSerialConfig((prevConfig) => ({
-            ...prevConfig,
-            open_status: false, // 连接失败时将状态设置为未打开
-          }));
-          messageApi.error(`串口错误: ${errorMessage}`);
-        });
-      if (!unlistenSerialError)
-        unlistenSerialError = await listen('tips', (event) => {
-          const errorMessage = event.payload as string;
-          messageApi.info(`串口错误: ${errorMessage}`);
-        });
+            }
+            return appendHexReceiveLine(prev, hexString, uint8Data, { prefixSendTag: show_send_message_ref.current });
+          });
+        };
+        if (auto_frame_ref.current) {
+          last_receive_time_ref.current = Date.now();
+        }
+      });
+      unlistenSerialFailed = await listen('serial-failed', (event) => {
+        if (!isMounted[1]) return;
+        const errorMessage = event.payload as string;
+        setSerialConfig((prevConfig) => ({
+          ...prevConfig,
+          open_status: false, // 连接失败时将状态设置为未打开
+        }));
+        messageApi.error(`串口错误: ${errorMessage}`);
+      });
+      unlistenSerialError = await listen('tips', (event) => {
+        if (!isMounted[2]) return;
+        const errorMessage = event.payload as string;
+        messageApi.info(`串口错误: ${errorMessage}`);
+      });
     };
 
     setupListeners();
-
     return () => {
+      isMounted = [false, false, false];
       if (unlistenDataUpdated) {
         unlistenDataUpdated();
       }
