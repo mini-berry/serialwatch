@@ -22,7 +22,9 @@
       }
     ],
     "security": {
-      "csp": null
+      "csp": {
+        "style-src": "'self' 'unsafe-inline'"
+      }
     }
   },
   "bundle": {
