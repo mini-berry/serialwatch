@@ -45,6 +45,7 @@ pub fn run() {
     let msg_state = MsgSenderState { sender: msg_sender };
 
     tauri::Builder::default()
+        .plugin(tauri_plugin_clipboard_manager::init())
         .setup(|_app| {
             let app_handle = _app.handle().clone();
             tauri::async_runtime::spawn(async move {
@@ -460,6 +461,7 @@ async fn open_and_activate_editor(app_handle: tauri::AppHandle) {
     )
     .title("脚本编辑器")
     .inner_size(800.0, 600.0)
+    .min_inner_size(600.0, 400.0)
     .center()
     .build();
 }

@@ -4,7 +4,7 @@ import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
 import { javascript } from "@codemirror/lang-javascript";
 import { EditorView } from "@codemirror/view";
 import React from "react";
-import { UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { UndoOutlined, RedoOutlined, UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import { Layout, ConfigProvider, theme, Menu, Dropdown, Button, Modal, Input, Radio } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
@@ -13,6 +13,9 @@ import { invoke } from "@tauri-apps/api/core";
 import * as prettier from 'prettier';
 import parserBabel from 'prettier/plugins/babel';
 import parserEstree from 'prettier/plugins/estree';
+import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
+import { undo, redo, historyField } from "@codemirror/commands";
+import { EditorState, keymap } from "@uiw/react-codemirror";
 
 interface ScriptConfig {
     recv_script: [string, string][];
@@ -33,6 +36,22 @@ const EditorPage: React.FC = () => {
         recv_script: [],
         send_script: []
     });
+    const saveKeymap = keymap.of([
+        {
+            key: "Mod-s",  // Mod = Ctrl on Windows/Linux, Cmd on Mac
+            run: () => {
+                saveCode();
+                return true; // 返回 true 阻止默认浏览器行为（例如浏览器保存页面）
+            }
+        },
+        {
+            key: "Alt-Shift-f",
+            run: () => {
+                formatCode();
+                return true;
+            }
+        }
+    ]);
     const newScript = useCallback(() => {
         const name = newScriptNameRef.current.trim();
         if (!name) {
@@ -73,6 +92,24 @@ const EditorPage: React.FC = () => {
     const [code, setCode] = React.useState<string>("console.log('Hello World');\n");
     const codeRef = useRef(code);
     const editorViewRef = useRef<EditorView | null>(null);
+    const [undoAvailable, setUndoAvailable] = React.useState(false);
+    const [redoAvailable, setRedoAvailable] = React.useState(false);
+    const [cmSelected, setCmSelected] = React.useState(false);
+    const updateListener = EditorView.updateListener.of((update) => {
+        if (update.selectionSet) {
+            const hasSelection = !update.state.selection.main.empty;
+            setCmSelected(hasSelection);
+        }
+    });
+    const updateUndoRedoState = () => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        const hist = view.state.field(historyField, false) as any;
+        if (!hist) return;
+        setUndoAvailable(hist.done.length > 1);
+        setRedoAvailable(hist.undone.length > 0);
+    };
+
     useEffect(() => {
         codeRef.current = code;
     }, [code]);
@@ -99,7 +136,7 @@ const EditorPage: React.FC = () => {
 
     const onPasteCode = async () => {
         try {
-            const text = await navigator.clipboard.readText();
+            const text = await readText();
             const view = editorViewRef.current;
             if (!view) return;
 
@@ -127,16 +164,60 @@ const EditorPage: React.FC = () => {
         }
     };
 
+    const onUndo = () => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        undo(view);
+        updateUndoRedoState();
+    }
+    const onRedo = () => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        redo(view);
+        updateUndoRedoState();
+    }
+
+    const onCopyCode = async () => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        const { from, to } = view.state.selection.main;
+        const selectedText = view.state.sliceDoc(from, to);
+        await writeText(selectedText);
+        view.focus();
+    };
+
+    const onCutCode = async () => {
+        const view = editorViewRef.current;
+        if (!view) return;
+        const { from, to } = view.state.selection.main;
+        const selectedText = view.state.sliceDoc(from, to);
+        await writeText(selectedText);
+        view.dispatch({
+            changes: {
+                from,
+                to,
+                insert: '',
+            },
+            selection: {
+                anchor: from,
+            },
+        });
+        const newCode = view.state.doc.toString();
+        setCode(newCode);
+        setIsCodeModified(true);
+        view.focus();
+    }
+
     const getContextItems = (index: number, type: 'recv' | 'send') => [
         { key: '1', label: '编辑', icon: <EditOutlined />, onClick: () => { openCode(type, index) } },
         { key: '2', label: '删除', icon: <DeleteOutlined />, onClick: () => { deleteCode(type, index) } },
     ];
     const cmItems: MenuProps['items'] = useMemo(() => [
-        { key: '1', label: '复制', icon: <CopyOutlined /> },
-        { key: '2', label: '剪切', icon: <ScissorOutlined /> },
+        { key: '1', label: '复制', icon: <CopyOutlined />, onClick: onCopyCode, disabled: !cmSelected },
+        { key: '2', label: '剪切', icon: <ScissorOutlined />, onClick: onCutCode, disabled: !cmSelected },
         { key: '3', label: '粘贴', icon: <DeleteOutlined />, onClick: onPasteCode },
         { key: '4', label: '格式化', icon: <FormatPainterOutlined />, onClick: formatCode },
-    ], [formatCode]);
+    ], [formatCode, cmSelected]);
 
     const isCodeModifiedRef = useRef(isCodeModified);
     useEffect(() => {
@@ -163,8 +244,6 @@ const EditorPage: React.FC = () => {
         }
     };
 
-
-
     const deleteCode = useCallback((type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
         if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
@@ -175,7 +254,6 @@ const EditorPage: React.FC = () => {
         scriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].splice(index, 1);
         setScriptConfig(prev => ({ ...prev }));
     }, [scriptConfig]);
-
     const openCode = useCallback((type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
         const hasChanges = isCodeModifiedRef.current;
@@ -192,6 +270,18 @@ const EditorPage: React.FC = () => {
             openedScriptIndexRef.current = { type, index };
             setIsCodeModified(false);
             setMenuKeys([`${type}-${index}`]);
+            const view = editorViewRef.current;
+            setRedoAvailable(false);
+            setUndoAvailable(false);
+
+            if (view) {
+                const state = EditorState.create({
+                    doc: view.state.doc.toString(),
+                    extensions: [[javascript(), updateListener, saveKeymap]],
+                });
+                view.setState(state);
+                view.focus();
+            }
         };
 
         if (hasChanges) {
@@ -314,19 +404,25 @@ const EditorPage: React.FC = () => {
                         <Button type="primary" className="new-button" onClick={() => setNewModalOpen(true)}>
                             <PlusSquareOutlined /> 新建脚本
                         </Button>
-                        <Button className="all-button" disabled={!isCodeModified} onClick={saveCode}>
+                        <Button className="all-button" disabled={!isCodeModified} onClick={saveCode} title="保存代码(Ctrl+S)">
                             <SaveOutlined />
                         </Button>
-                        <Button className="all-button">
+                        <Button className="all-button" onClick={onUndo} disabled={!undoAvailable} title="撤销(Ctrl+Z)">
+                            <UndoOutlined />
+                        </Button>
+                        <Button className="all-button" onClick={onRedo} disabled={!redoAvailable} title="重做(Ctrl+Y)">
+                            <RedoOutlined />
+                        </Button>
+                        <Button className="all-button" onClick={onCopyCode} disabled={!cmSelected} title="复制(Ctrl+C)">
                             <CopyOutlined />
                         </Button>
-                        <Button className="all-button">
+                        <Button className="all-button" onClick={onCutCode} disabled={!cmSelected} title="剪切(Ctrl+X)">
                             <ScissorOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onPasteCode}>
+                        <Button className="all-button" onClick={onPasteCode} title="粘贴(Ctrl+V)">
                             <SnippetsOutlined />
                         </Button>
-                        <Button className="all-button" onClick={formatCode}>
+                        <Button className="all-button" onClick={formatCode} title="格式化(Alt+Shift+F)">
                             <FormatPainterOutlined />
                         </Button>
                     </Layout.Header>
@@ -348,13 +444,15 @@ const EditorPage: React.FC = () => {
                                     value={code}
                                     height="100%" // 告诉组件占满父容器高度
                                     width="100%"
-                                    extensions={[javascript()]}
+                                    extensions={[javascript(), updateListener, saveKeymap]}
                                     onCreateEditor={(view) => {
                                         editorViewRef.current = view;
                                     }}
                                     onChange={(value) => {
                                         setCode(value);
                                         setIsCodeModified(true);
+                                        setUndoAvailable(true);
+                                        setRedoAvailable(false);
                                     }}
                                     theme={darkMode ? vscodeDark : vscodeLight}
                                     className="coder-mirror-container"
