@@ -1,13 +1,13 @@
 import "./EditorPage.css";
 import CodeMirror from "@uiw/react-codemirror";
 import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
-import { javascript } from "@codemirror/lang-javascript"; // 建议引入语言包以启用高亮
+import { javascript } from "@codemirror/lang-javascript";
 import React from "react";
 import { UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import { Layout, ConfigProvider, theme, Menu, Dropdown, Button, Modal } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
-import { useEffect, useMemo } from "react";
+import { useEffect, useMemo, useCallback, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as prettier from 'prettier';
 import parserBabel from 'prettier/plugins/babel';
@@ -19,6 +19,8 @@ interface ScriptConfig {
 }
 
 const EditorPage: React.FC = () => {
+    const [isModalOpen, setIsModalOpen] = React.useState(false);
+    const pendingActionRef = useRef<null | { onSave: () => void; onDiscard: () => void }>(null);
     const [menuKeys, setMenuKeys] = React.useState<string[]>([]);
     const [scriptConfig, setScriptConfig] = React.useState<ScriptConfig>({
         recv_script: [],
@@ -31,6 +33,10 @@ const EditorPage: React.FC = () => {
         });
     }, []);
     const [code, setCode] = React.useState<string>("console.log('Hello World');\n");
+    const codeRef = useRef(code);
+    useEffect(() => {
+        codeRef.current = code;
+    }, [code]);
     const [isCodeModified, setIsCodeModified] = React.useState<boolean>(false);
     const [openedScriptIndex, setOpenedScriptIndex] = React.useState<{ type: 'recv' | 'send'; index: number } | null>(null);
     const formatCode = async () => {
@@ -52,109 +58,81 @@ const EditorPage: React.FC = () => {
         }
     }
 
-    const contextItems: MenuProps['items'] = [
+    const contextItems: MenuProps['items'] = useMemo(() => [
         { key: '1', label: '编辑', icon: <EditOutlined /> },
         { key: '2', label: '删除', icon: <DeleteOutlined /> },
-    ]
-    const cmItems: MenuProps['items'] = [
+    ], []);
+    const cmItems: MenuProps['items'] = useMemo(() => [
         { key: '1', label: '复制', icon: <CopyOutlined /> },
         { key: '2', label: '剪切', icon: <ScissorOutlined /> },
         { key: '3', label: '粘贴', icon: <DeleteOutlined /> },
         { key: '4', label: '格式化', icon: <FormatPainterOutlined />, onClick: formatCode },
-    ];
+    ], [formatCode]);
 
-    const saveCode = () => {
+    const isCodeModifiedRef = useRef(isCodeModified);
+    const openedScriptIndexRef = useRef(openedScriptIndex);
+    useEffect(() => {
+        isCodeModifiedRef.current = isCodeModified;
+    }, [isCodeModified]);
+    useEffect(() => {
+        openedScriptIndexRef.current = openedScriptIndex;
+    }, [openedScriptIndex]);
+
+    const saveCode = useCallback(() => {
         setIsCodeModified(false);
+        const openedScriptIndex = openedScriptIndexRef.current;
         if (openedScriptIndex) {
             if (openedScriptIndex.type === 'recv') {
-                scriptConfig.recv_script[openedScriptIndex.index][1] = code;
+                setScriptConfig(prev => {
+                    const newConfig = { ...prev };
+                    newConfig.recv_script[openedScriptIndex.index][1] = codeRef.current;
+                    return newConfig;
+                });
             } else {
-                scriptConfig.send_script[openedScriptIndex.index][1] = code;
+                setScriptConfig(prev => {
+                    const newConfig = { ...prev };
+                    newConfig.send_script[openedScriptIndex.index][1] = codeRef.current;
+                    return newConfig;
+                });
             }
         }
-    }
+    }, []);
 
-    const openSendCode = async (index: number, isCodeModified: boolean, openedScriptIndex: { type: 'recv' | 'send'; index: number } | null) => {
-        console.log(openedScriptIndex, "Send", index, isCodeModified);
-        if (openedScriptIndex && openedScriptIndex.type === 'recv' && openedScriptIndex.index === index) {
+    const openCode = useCallback((type: 'recv' | 'send', index: number) => {
+        const currentOpened = openedScriptIndexRef.current;
+        const hasChanges = isCodeModifiedRef.current;
+        if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
             return;
         }
 
-        if (isCodeModified) {
-            Modal.confirm({
-                title: '保存更改？',
-                content: '您有未保存的更改，是否要保存？',
-                footer: [
-                    <Button key="save" type="primary" onClick={() => {
-                        saveCode();
-                        setCode(scriptConfig.send_script[index][1]);
-                        setOpenedScriptIndex({ type: 'send', index });
-                        setMenuKeys([`send-${index}`]);
-                        Modal.destroyAll();
-                    }}>
-                        是
-                    </Button>,
-                    <Button key="no" onClick={() => {
-                        setCode(scriptConfig.send_script[index][1]);
-                        setOpenedScriptIndex({ type: 'send', index });
-                        setMenuKeys([`send-${index}`]);
-                        Modal.destroyAll();
-                    }}>
-                        否
-                    </Button>,
-                    <Button key="cancel" onClick={Modal.destroyAll}>
-                        取消
-                    </Button>,
-                ],
-            });
-            return;
-        }
-        setCode(scriptConfig.send_script[index][1]);
-        setMenuKeys([`send-${index}`]);
-        return;
-    };
+        const nextCode = type === 'recv'
+            ? (scriptConfig.recv_script[index]?.[1] ?? '')
+            : (scriptConfig.send_script[index]?.[1] ?? '');
 
-    const openRecvCode = async (index: number, isCodeModified: boolean, openedScriptIndex: { type: 'recv' | 'send'; index: number } | null) => {
-        console.log(openedScriptIndex, "Recv", index, isCodeModified);
-        if (openedScriptIndex && openedScriptIndex.type === 'recv' && openedScriptIndex.index === index) {
+        const applyOpen = () => {
+            setCode(nextCode);
+            setOpenedScriptIndex({ type, index });
+            setIsCodeModified(false);
+            setMenuKeys([`${type}-${index}`]);
+        };
+
+        if (hasChanges) {
+            setIsModalOpen(true);
+            pendingActionRef.current = {
+                onSave: () => {
+                    saveCode();
+                    applyOpen();
+                },
+                onDiscard: () => {
+                    applyOpen();
+                }
+            };
+
             return;
         }
 
-        if (isCodeModified) {
-            Modal.confirm({
-                title: '保存更改？',
-                content: '您有未保存的更改，是否要保存？',
-                footer: [
-                    <Button key="save" type="primary" onClick={() => {
-                        saveCode();
-                        setCode(scriptConfig.recv_script[index][1]);
-                        setOpenedScriptIndex({ type: 'recv', index });
-                        setIsCodeModified(false);
-                        setMenuKeys([`recv-${index}`]);
-                        Modal.destroyAll();
-                    }}>
-                        是
-                    </Button>,
-                    <Button key="no" onClick={() => {
-                        setCode(scriptConfig.recv_script[index][1]);
-                        setOpenedScriptIndex({ type: 'recv', index });
-                        setIsCodeModified(false);
-                        setMenuKeys([`recv-${index}`]);
-                        Modal.destroyAll();
-                    }}>
-                        否
-                    </Button>,
-                    <Button key="cancel" onClick={Modal.destroyAll}>
-                        取消
-                    </Button>,
-                ],
-            });
-            return;
-        }
-        setCode(scriptConfig.recv_script[index][1]);
-        setMenuKeys([`recv-${index}`]);
-        return;
-    };
+        applyOpen();
+    }, [scriptConfig]);
 
 
     const items: MenuProps['items'] = useMemo(() => [
@@ -170,7 +148,7 @@ const EditorPage: React.FC = () => {
                     </Dropdown>
                 ),
                 onClick: () => {
-                    openRecvCode(index, isCodeModified, openedScriptIndex);
+                    openCode('recv', index);
                 }
             })),
         },
@@ -187,11 +165,11 @@ const EditorPage: React.FC = () => {
                         </div>
                     </Dropdown>
                 ),
-                onClick: () => { openSendCode(index, isCodeModified, openedScriptIndex); }
+                onClick: () => { openCode('send', index); }
             })),
         }
-    ], [scriptConfig, isCodeModified, openedScriptIndex]);
-    
+    ], [scriptConfig, contextItems]);
+
     // 监视local配置
     const subscribe = (onStoreChange: () => void) => {
         window.addEventListener('storage', onStoreChange);
@@ -215,6 +193,33 @@ const EditorPage: React.FC = () => {
             theme={{
                 algorithm: darkMode ? theme.darkAlgorithm : undefined
             }}>
+            <Modal title="保存更改？" onCancel={() => {
+                setIsModalOpen(false);
+                pendingActionRef.current = null;
+            }} open={isModalOpen} mask={{ blur: true }} footer={[
+                <Button key="save" type="primary" onClick={() => {
+                    pendingActionRef.current?.onSave();
+                    pendingActionRef.current = null;
+                    setIsModalOpen(false);
+                }}>
+                    是
+                </Button>,
+                <Button key="no" onClick={() => {
+                    pendingActionRef.current?.onDiscard();
+                    pendingActionRef.current = null;
+                    setIsModalOpen(false);
+                }}>
+                    否
+                </Button>,
+                <Button key="cancel" onClick={() => {
+                    setIsModalOpen(false);
+                    pendingActionRef.current = null;
+                }}>
+                    取消
+                </Button>,
+            ]}>
+                <p>您有未保存的更改，是否要保存？</p>
+            </Modal>
             <div className="main-container">
                 <Layout className="main-layout">
                     <Layout.Header className="header">
