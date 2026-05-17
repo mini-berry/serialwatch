@@ -502,8 +502,7 @@ const EditorPage: React.FC = () => {
                                     onChange={(value) => {
                                         setCode(value);
                                         setIsCodeModified(true);
-                                        setUndoAvailable(true);
-                                        setRedoAvailable(false);
+                                        updateUndoRedoState();
                                     }}
                                     theme={darkMode ? vscodeDark : vscodeLight}
                                     className="coder-mirror-container"
