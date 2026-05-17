@@ -266,21 +266,29 @@ const EditorPage: React.FC = () => {
     const deleteCode = async (type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
         const currentConfig = scriptConfigRef.current;
-        if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
-            return;
-        }
         const newScriptConfig: ScriptConfig = {
             recv_script: currentConfig.recv_script.map((item) => [...item] as [string, string]),
             send_script: currentConfig.send_script.map((item) => [...item] as [string, string]),
         };
         newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'] =
             newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].filter((_, i) => i !== index);
+
+        setScriptConfig(newScriptConfig);
+
         try {
             await invoke('save_script_config', { newConfig: newScriptConfig });
         } catch (error) {
             console.error('Failed to save script config:', error);
         }
-        setScriptConfig(newScriptConfig);
+
+        if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
+            setTimeout(() => {
+                setCode('');
+                openedScriptIndexRef.current = null;
+                setMenuKeys([]);
+                setHasOpened(false);
+            }, 0);
+        }
     };
 
     const openCode = useCallback((type: 'recv' | 'send', index: number) => {
@@ -334,7 +342,7 @@ const EditorPage: React.FC = () => {
 
     const getContextItems = useCallback((index: number, type: 'recv' | 'send') => [
         { key: '1', label: '编辑', icon: <EditOutlined />, onClick: () => { openCode(type, index) } },
-        { key: '2', label: '删除', icon: <DeleteOutlined />, onClick: () => { deleteCode(type, index) }, disabled: openedScriptIndexRef.current?.type === type && openedScriptIndexRef.current?.index === index },
+        { key: '2', label: '删除', icon: <DeleteOutlined />, onClick: () => { deleteCode(type, index) } },
     ], [openCode, deleteCode]);
     const cmItems: MenuProps['items'] = useMemo(() => [
         { key: '1', label: '复制', icon: <CopyOutlined />, onClick: onCopyCode, disabled: !cmSelected },
