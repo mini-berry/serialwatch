@@ -87,6 +87,7 @@ async fn serial_thread(
 
     loop {
         let config_updater = config_receiver.try_recv();
+        let mut data_interrupt = false;
         match config_updater {
             Ok(new_config) => {
                 #[cfg(debug_assertions)]
@@ -173,6 +174,7 @@ async fn serial_thread(
                                 let received_data = &storage [..n];
                                 data_buffer.extend_from_slice(received_data);
                                 last_receive_time = std::time::Instant::now();
+                                data_interrupt = false;
                             }
                             Err(e) => {
                                 #[cfg(debug_assertions)]
@@ -188,7 +190,7 @@ async fn serial_thread(
                                     eprintln!("Failed to send error to main thread: {_err}");
                                 });
                             }
-                            _ => {}
+                            _ => {data_interrupt = true;}
                         }
                     }
                     _  =  tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
@@ -259,6 +261,7 @@ async fn serial_thread(
         if data_buffer.len() > 100
             || (last_receive_time.elapsed() > std::time::Duration::from_millis(40)
                 && !data_buffer.is_empty())
+            || data_interrupt
         {
             #[cfg(debug_assertions)]
             println!("Emitting data to frontend: {} bytes", data_buffer.len());
