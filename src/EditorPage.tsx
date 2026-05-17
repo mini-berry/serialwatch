@@ -8,13 +8,13 @@ import { UndoOutlined, RedoOutlined, UpOutlined, DownOutlined, DeleteOutlined, E
 import { Layout, ConfigProvider, theme, Menu, Dropdown, Button, Modal, Input, Radio } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
-import { useEffect, useMemo, useRef } from "react";
+import { useCallback, useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as prettier from 'prettier';
 import parserBabel from 'prettier/plugins/babel';
 import parserEstree from 'prettier/plugins/estree';
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
-import { undo, redo, historyField } from "@codemirror/commands";
+import { undo, redo, history, historyField } from "@codemirror/commands";
 import { EditorState, keymap } from "@uiw/react-codemirror";
 
 interface ScriptConfig {
@@ -24,7 +24,7 @@ interface ScriptConfig {
 
 const EditorPage: React.FC = () => {
     const [isModalOpen, setIsModalOpen] = React.useState(false);
-    const pendingActionRef = useRef<null | { onSave: () => void; onDiscard: () => void }>(null);
+    const pendingActionRef = useRef<null | { onSave: () => void | Promise<void>; onDiscard: () => void }>(null);
     const [newModalOpen, setNewModalOpen] = React.useState(false);
     const [newScriptName, setNewScriptName] = React.useState<string>('New script');
     const newScriptNameRef = useRef<string>('New script');
@@ -40,22 +40,6 @@ const EditorPage: React.FC = () => {
     useEffect(() => {
         scriptConfigRef.current = scriptConfig;
     }, [scriptConfig]);
-    const saveKeymap = keymap.of([
-        {
-            key: "Mod-s",  // Mod = Ctrl on Windows/Linux, Cmd on Mac
-            run: () => {
-                saveCode();
-                return true; // 返回 true 阻止默认浏览器行为（例如浏览器保存页面）
-            }
-        },
-        {
-            key: "Alt-Shift-f",
-            run: () => {
-                formatCode();
-                return true;
-            }
-        }
-    ]);
     const newScript = async () => {
         let newScriptConfig = scriptConfigRef.current;
         let oldScriptConfig = scriptConfigRef.current;
@@ -129,10 +113,12 @@ const EditorPage: React.FC = () => {
         codeRef.current = code;
     }, [code]);
     const [isCodeModified, setIsCodeModified] = React.useState<boolean>(false);
+    const [hasOpened, setHasOpened] = React.useState<boolean>(false);
     const openedScriptIndexRef = useRef<{ type: 'recv' | 'send'; index: number } | null>(null);
     const formatCode = async () => {
         try {
-            const formattedCode = await prettier.format(code, {
+            const oldCode = codeRef.current;
+            const formattedCode = await prettier.format(oldCode, {
                 parser: "babel",
                 plugins: [parserBabel, parserEstree],
                 semi: true,
@@ -140,16 +126,16 @@ const EditorPage: React.FC = () => {
                 tabWidth: 2,
                 endOfLine: "auto",
             });
-            if (formattedCode !== code) {
+            if (formattedCode !== oldCode) {
                 setIsCodeModified(true);
             }
             setCode(formattedCode);
         } catch (_error) {
             console.error('代码格式化失败:', _error);
         }
-    }
+    };
 
-    const onPasteCode = async () => {
+    const onPasteCode = useCallback(async () => {
         try {
             const text = await readText();
             const view = editorViewRef.current;
@@ -177,73 +163,74 @@ const EditorPage: React.FC = () => {
         } catch (err) {
             console.error('Failed to read clipboard contents: ', err);
         }
-    };
+    }, []);
 
-    const onUndo = () => {
+    const onUndo = useCallback(() => {
         const view = editorViewRef.current;
         if (!view) return;
         undo(view);
         updateUndoRedoState();
-    }
-    const onRedo = () => {
+    }, [updateUndoRedoState]);
+    const onRedo = useCallback(() => {
         const view = editorViewRef.current;
         if (!view) return;
         redo(view);
         updateUndoRedoState();
-    }
+    }, [updateUndoRedoState]);
 
-    const onCopyCode = async () => {
-        const view = editorViewRef.current;
-        if (!view) return;
-        const { from, to } = view.state.selection.main;
-        const selectedText = view.state.sliceDoc(from, to);
-        await writeText(selectedText);
-        view.focus();
-    };
+    const onCopyCode = useCallback(async () => {
+        try {
+            const view = editorViewRef.current;
+            if (!view) return;
+            const { from, to } = view.state.selection.main;
+            const selectedText = view.state.sliceDoc(from, to);
+            await writeText(selectedText);
+            view.focus();
+        } catch (err) {
+            console.error('Failed to write clipboard contents: ', err);
+        }
+    }, []);
 
-    const onCutCode = async () => {
-        const view = editorViewRef.current;
-        if (!view) return;
-        const { from, to } = view.state.selection.main;
-        const selectedText = view.state.sliceDoc(from, to);
-        await writeText(selectedText);
-        view.dispatch({
-            changes: {
-                from,
-                to,
-                insert: '',
-            },
-            selection: {
-                anchor: from,
-            },
-        });
-        const newCode = view.state.doc.toString();
-        setCode(newCode);
-        setIsCodeModified(true);
-        view.focus();
-    }
+    const onCutCode = useCallback(async () => {
+        try {
+            const view = editorViewRef.current;
+            if (!view) return;
+            const { from, to } = view.state.selection.main;
+            const selectedText = view.state.sliceDoc(from, to);
+            await writeText(selectedText);
+            view.dispatch({
+                changes: {
+                    from,
+                    to,
+                    insert: '',
+                },
+                selection: {
+                    anchor: from,
+                },
+            });
+            const newCode = view.state.doc.toString();
+            setCode(newCode);
+            setIsCodeModified(true);
+            view.focus();
+        } catch (err) {
+            console.error('Failed to write clipboard contents: ', err);
+        }
+    }, []);
 
-    const getContextItems = (index: number, type: 'recv' | 'send') => [
-        { key: '1', label: '编辑', icon: <EditOutlined />, onClick: () => { openCode(type, index) } },
-        { key: '2', label: '删除', icon: <DeleteOutlined />, onClick: () => { deleteCode(type, index) } },
-    ];
-    const cmItems: MenuProps['items'] = useMemo(() => [
-        { key: '1', label: '复制', icon: <CopyOutlined />, onClick: onCopyCode, disabled: !cmSelected },
-        { key: '2', label: '剪切', icon: <ScissorOutlined />, onClick: onCutCode, disabled: !cmSelected },
-        { key: '3', label: '粘贴', icon: <DeleteOutlined />, onClick: onPasteCode },
-        { key: '4', label: '格式化', icon: <FormatPainterOutlined />, onClick: formatCode },
-    ], [formatCode, cmSelected]);
 
     const isCodeModifiedRef = useRef(isCodeModified);
     useEffect(() => {
         isCodeModifiedRef.current = isCodeModified;
     }, [isCodeModified]);
 
-    const saveCode = async () => {
-        setIsCodeModified(false);
+    const saveCode = useCallback(async () => {
         const openedScriptIndex = openedScriptIndexRef.current;
         if (openedScriptIndex) {
-            let newScriptConfig = { ...scriptConfigRef.current };
+            const currentConfig = scriptConfigRef.current;
+            const newScriptConfig: ScriptConfig = {
+                recv_script: currentConfig.recv_script.map((item) => [...item] as [string, string]),
+                send_script: currentConfig.send_script.map((item) => [...item] as [string, string]),
+            };
             if (openedScriptIndex.type === 'recv') {
                 newScriptConfig.recv_script[openedScriptIndex.index][1] = codeRef.current;
             } else {
@@ -252,21 +239,42 @@ const EditorPage: React.FC = () => {
             setScriptConfig(newScriptConfig);
             try {
                 await invoke('save_script_config', { newConfig: newScriptConfig });
+                setIsCodeModified(false);
             } catch (error) {
                 console.error('Failed to save script config:', error);
             }
         };
-    }
+    }, []);
+
+    const saveKeymap = useMemo(() => keymap.of([
+        {
+            key: "Mod-s",  // Mod = Ctrl on Windows/Linux, Cmd on Mac
+            run: () => {
+                saveCode();
+                return true; // 返回 true 阻止默认浏览器行为（例如浏览器保存页面）
+            }
+        },
+        {
+            key: "Alt-Shift-f",
+            run: () => {
+                formatCode();
+                return true;
+            }
+        }
+    ]), [saveCode, formatCode]);
 
     const deleteCode = async (type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
+        const currentConfig = scriptConfigRef.current;
         if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
-            setMenuKeys([]);
-            setCode('');
-            openedScriptIndexRef.current = null;
+            return;
         }
-        let newScriptConfig = { ...scriptConfigRef.current };
-        newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].splice(index, 1);
+        const newScriptConfig: ScriptConfig = {
+            recv_script: currentConfig.recv_script.map((item) => [...item] as [string, string]),
+            send_script: currentConfig.send_script.map((item) => [...item] as [string, string]),
+        };
+        newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'] =
+            newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].filter((_, i) => i !== index);
         try {
             await invoke('save_script_config', { newConfig: newScriptConfig });
         } catch (error) {
@@ -275,7 +283,8 @@ const EditorPage: React.FC = () => {
         setScriptConfig(newScriptConfig);
     };
 
-    const openCode = (type: 'recv' | 'send', index: number) => {
+    const openCode = useCallback((type: 'recv' | 'send', index: number) => {
+        setHasOpened(true);
         const currentOpened = openedScriptIndexRef.current;
         const hasChanges = isCodeModifiedRef.current;
         if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
@@ -297,19 +306,19 @@ const EditorPage: React.FC = () => {
 
             if (view) {
                 const state = EditorState.create({
-                    doc: view.state.doc.toString(),
-                    extensions: [[javascript(), updateListener, saveKeymap]],
+                    doc: nextCode,
+                    extensions: [[javascript(), history(), updateListener, saveKeymap]],
                 });
                 view.setState(state);
                 view.focus();
             }
         };
 
-        if (hasChanges) {
+        if (hasChanges && currentOpened) {
             setIsModalOpen(true);
             pendingActionRef.current = {
-                onSave: () => {
-                    saveCode();
+                onSave: async () => {
+                    await saveCode();
                     applyOpen();
                 },
                 onDiscard: () => {
@@ -321,7 +330,18 @@ const EditorPage: React.FC = () => {
         }
 
         applyOpen();
-    };
+    }, [saveCode, updateListener, saveKeymap]);
+
+    const getContextItems = useCallback((index: number, type: 'recv' | 'send') => [
+        { key: '1', label: '编辑', icon: <EditOutlined />, onClick: () => { openCode(type, index) } },
+        { key: '2', label: '删除', icon: <DeleteOutlined />, onClick: () => { deleteCode(type, index) }, disabled: openedScriptIndexRef.current?.type === type && openedScriptIndexRef.current?.index === index },
+    ], [openCode, deleteCode]);
+    const cmItems: MenuProps['items'] = useMemo(() => [
+        { key: '1', label: '复制', icon: <CopyOutlined />, onClick: onCopyCode, disabled: !cmSelected },
+        { key: '2', label: '剪切', icon: <ScissorOutlined />, onClick: onCutCode, disabled: !cmSelected },
+        { key: '3', label: '粘贴', icon: <DeleteOutlined />, onClick: onPasteCode },
+        { key: '4', label: '格式化', icon: <FormatPainterOutlined />, onClick: formatCode },
+    ], [formatCode, cmSelected, onCopyCode, onCutCode, onPasteCode]);
 
     const items: MenuProps['items'] = useMemo(() => [
         {
@@ -356,7 +376,9 @@ const EditorPage: React.FC = () => {
                 onClick: () => { openCode('send', index); }
             })),
         }
-    ], [scriptConfig]);
+    ], [scriptConfig, getContextItems, openCode]);
+
+    const editorExtensions = useMemo(() => [javascript(), history(), updateListener, saveKeymap], [updateListener, saveKeymap]);
 
     // 监视local配置
     const subscribe = (onStoreChange: () => void) => {
@@ -425,7 +447,7 @@ const EditorPage: React.FC = () => {
                         <Button type="primary" className="new-button" onClick={() => setNewModalOpen(true)}>
                             <PlusSquareOutlined /> 新建脚本
                         </Button>
-                        <Button className="all-button" disabled={!isCodeModified} onClick={saveCode} title="保存代码(Ctrl+S)">
+                        <Button className="all-button" disabled={!isCodeModified || !hasOpened} onClick={saveCode} title="保存代码(Ctrl+S)">
                             <SaveOutlined />
                         </Button>
                         <Button className="all-button" onClick={onUndo} disabled={!undoAvailable} title="撤销(Ctrl+Z)">
@@ -465,7 +487,7 @@ const EditorPage: React.FC = () => {
                                     value={code}
                                     height="100%" // 告诉组件占满父容器高度
                                     width="100%"
-                                    extensions={[javascript(), updateListener, saveKeymap]}
+                                    extensions={editorExtensions}
                                     onCreateEditor={(view) => {
                                         editorViewRef.current = view;
                                     }}
