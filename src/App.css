@@ -307,3 +307,7 @@ body {
   padding: 0px 6px;
   margin-left: 3px;
 }
+
+.no-select {
+  user-select: none;
+}

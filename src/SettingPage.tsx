@@ -57,7 +57,7 @@ const SettingPage: React.FC = () => {
     };
 
     const Display = () => {
-        return (<div className="setting-row">
+        return (<div className="setting-row no-select">
             <div>夜间模式</div>
             <Switch
                 checkedChildren={< CheckOutlined />}
@@ -87,7 +87,7 @@ const SettingPage: React.FC = () => {
                 <Layout.Content>
                     <Layout style={{ height: '100%' }}>
                         <Layout.Sider width={100} >
-                            <Menu items={items} style={{ height: '100%' }} onClick={handleMenuClick}>
+                            <Menu items={items} style={{ height: '100%' }} onClick={handleMenuClick} className='no-select'>
                             </Menu>
                         </Layout.Sider>
                         <Layout.Content style={{ padding: '15px 15px 0px 15px' }}>

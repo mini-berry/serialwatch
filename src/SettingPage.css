@@ -26,3 +26,7 @@ body {
     background-color: var(--ant-blue-2);
     padding: 10px;
 }
+
+.no-select {
+    user-select: none;
+}

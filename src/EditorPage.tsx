@@ -481,7 +481,7 @@ const EditorPage: React.FC = () => {
                         <Layout.Sider width="180">
                             <Menu
                                 selectedKeys={menuKeys}
-                                className="sider-menu"
+                                className="sider-menu no-select"
                                 defaultOpenKeys={['recv', 'send']}
                                 mode="inline"
                                 items={items}

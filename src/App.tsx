@@ -623,7 +623,7 @@ const SerialDebugger: React.FC = () => {
       }}>
       <div className="main-container">
         <Splitter onCollapse={collapseHandler} >
-          <Splitter.Panel className={`left-splitter ${leftPanelCollapsed ? 'collapsed' : ''} ${darkMode ? 'dark' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
+          <Splitter.Panel className={`left-splitter no-select ${leftPanelCollapsed ? 'collapsed' : ''} ${darkMode ? 'dark' : ''}`} min={200} defaultSize={200} collapsible={{ start: true, end: true, showCollapsibleIcon: true }}>
             <div className='left-section' onContextMenu={preventContextMenu}>
               <div className="row" style={{ paddingTop: "10px" }}>
                 <label className="label">端口名</label>
@@ -916,7 +916,7 @@ const SerialDebugger: React.FC = () => {
                   </div>
                 </div>
               </div>
-              <div className="log-section" onContextMenu={preventContextMenu}>
+              <div className="log-section no-select" onContextMenu={preventContextMenu}>
                 <UpOutlined />
                 &nbsp;发送:{send_count}
                 &nbsp;&nbsp;|
