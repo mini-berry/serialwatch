@@ -37,6 +37,14 @@ const SettingPage: React.FC = () => {
         invoke('close_about');
     };
 
+    const [version, setVersion] = useState('');
+    useEffect(() => {
+        const fetchVersion = async () => {
+            const version = await getVersion();
+            setVersion(version);
+        };
+        fetchVersion();
+    }, []);
     const onChangeDarkMode = (checked: boolean) => {
         setDarkMode(checked);
         if (checked) {
@@ -49,16 +57,19 @@ const SettingPage: React.FC = () => {
     };
 
     const Display = () => {
-        return (<div className="setting-row"><div>夜间模式</div> < Switch
-            checkedChildren={< CheckOutlined />}
-            unCheckedChildren={< CloseOutlined />}
-            checked={darkMode}
-            onChange={onChangeDarkMode}
-        /></div>)
+        return (<div className="setting-row">
+            <div>夜间模式</div>
+            <Switch
+                checkedChildren={< CheckOutlined />}
+                unCheckedChildren={< CloseOutlined />}
+                checked={darkMode}
+                onChange={onChangeDarkMode}
+            />
+        </div>)
     };
     const About = () => {
-        return (<div style={{ paddingTop: '0' }}>
-            <h2>Serialwatch.rs {getVersion()}</h2>
+        return (<div style={{ paddingLeft: '10px' }}>
+            <p>Serialwatch.rs V{version}</p>
             <p>作者: Mini-Berry</p>
             <p>开源地址:</p>
             <a onClick={(e) => { e.preventDefault(); handleOpen('https://github.com/mini-berry/serialwatch'); }} href="https://github.com/mini-berry/serialwatch" target="_blank" rel="noopener noreferrer">https://github.com/mini-berry/serialwatch</a>

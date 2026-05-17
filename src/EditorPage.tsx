@@ -507,6 +507,7 @@ const EditorPage: React.FC = () => {
                                     }}
                                     theme={darkMode ? vscodeDark : vscodeLight}
                                     className="coder-mirror-container"
+                                    style={{ display: hasOpened ? '' : 'none' }}
                                 />
                             </Dropdown>
                         </Layout.Content>
