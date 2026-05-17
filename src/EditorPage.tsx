@@ -8,7 +8,7 @@ import { UndoOutlined, RedoOutlined, UpOutlined, DownOutlined, DeleteOutlined, E
 import { Layout, ConfigProvider, theme, Menu, Dropdown, Button, Modal, Input, Radio } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
-import { useEffect, useMemo, useCallback, useRef } from "react";
+import { useEffect, useMemo, useRef } from "react";
 import { invoke } from "@tauri-apps/api/core";
 import * as prettier from 'prettier';
 import parserBabel from 'prettier/plugins/babel';
@@ -36,6 +36,10 @@ const EditorPage: React.FC = () => {
         recv_script: [],
         send_script: []
     });
+    const scriptConfigRef = useRef<ScriptConfig>(scriptConfig);
+    useEffect(() => {
+        scriptConfigRef.current = scriptConfig;
+    }, [scriptConfig]);
     const saveKeymap = keymap.of([
         {
             key: "Mod-s",  // Mod = Ctrl on Windows/Linux, Cmd on Mac
@@ -52,17 +56,19 @@ const EditorPage: React.FC = () => {
             }
         }
     ]);
-    const newScript = useCallback(() => {
+    const newScript = async () => {
+        let newScriptConfig = scriptConfigRef.current;
+        let oldScriptConfig = scriptConfigRef.current;
         const name = newScriptNameRef.current.trim();
         if (!name) {
             return;
         }
         let nameList;
         if (newScriptTypeRef.current === 'recv') {
-            nameList = scriptConfig.recv_script.map(s => s[0]);
+            nameList = oldScriptConfig.recv_script.map(s => s[0]);
         }
         else {
-            nameList = scriptConfig.send_script.map(s => s[0]);
+            nameList = oldScriptConfig.send_script.map(s => s[0]);
         }
         let nameIndex = 1;
         let finalName = name;
@@ -71,17 +77,26 @@ const EditorPage: React.FC = () => {
             nameIndex++;
         }
         if (newScriptTypeRef.current === 'recv') {
-            setScriptConfig(prev => ({
-                ...prev,
-                recv_script: [...prev.recv_script, [finalName, '']]
-            }));
+            newScriptConfig = {
+                ...oldScriptConfig,
+                recv_script: [...oldScriptConfig.recv_script, [finalName, '']]
+            };
         } else {
-            setScriptConfig(prev => ({
-                ...prev,
-                send_script: [...prev.send_script, [finalName, '']]
-            }));
+            newScriptConfig = {
+                ...oldScriptConfig,
+                send_script: [...oldScriptConfig.send_script, [finalName, '']]
+            };
         }
-    }, [scriptConfig]);
+        setScriptConfig(newScriptConfig);
+        try {
+            await invoke('save_script_config', { newConfig: newScriptConfig }).then(() => {
+                const newIndex = (newScriptTypeRef.current === 'recv' ? newScriptConfig.recv_script.length : newScriptConfig.send_script.length) - 1;
+                openCode(newScriptTypeRef.current, newIndex);
+            });
+        } catch (error) {
+            console.error('Failed to save script config:', error);
+        }
+    };
     const [menuKeys, setMenuKeys] = React.useState<string[]>([]);
     useEffect(() => {
         invoke('load_script_config').then((scripts) => {
@@ -89,7 +104,7 @@ const EditorPage: React.FC = () => {
             setScriptConfig(scriptsConfig);
         });
     }, []);
-    const [code, setCode] = React.useState<string>("console.log('Hello World');\n");
+    const [code, setCode] = React.useState<string>("");
     const codeRef = useRef(code);
     const editorViewRef = useRef<EditorView | null>(null);
     const [undoAvailable, setUndoAvailable] = React.useState(false);
@@ -224,37 +239,43 @@ const EditorPage: React.FC = () => {
         isCodeModifiedRef.current = isCodeModified;
     }, [isCodeModified]);
 
-    const saveCode = () => {
+    const saveCode = async () => {
         setIsCodeModified(false);
         const openedScriptIndex = openedScriptIndexRef.current;
         if (openedScriptIndex) {
+            let newScriptConfig = { ...scriptConfigRef.current };
             if (openedScriptIndex.type === 'recv') {
-                setScriptConfig(prev => {
-                    const newConfig = { ...prev };
-                    newConfig.recv_script[openedScriptIndex.index][1] = codeRef.current;
-                    return newConfig;
-                });
+                newScriptConfig.recv_script[openedScriptIndex.index][1] = codeRef.current;
             } else {
-                setScriptConfig(prev => {
-                    const newConfig = { ...prev };
-                    newConfig.send_script[openedScriptIndex.index][1] = codeRef.current;
-                    return newConfig;
-                });
+                newScriptConfig.send_script[openedScriptIndex.index][1] = codeRef.current;
             }
-        }
-    };
+            setScriptConfig(newScriptConfig);
+            try {
+                await invoke('save_script_config', { newConfig: newScriptConfig });
+            } catch (error) {
+                console.error('Failed to save script config:', error);
+            }
+        };
+    }
 
-    const deleteCode = useCallback((type: 'recv' | 'send', index: number) => {
+    const deleteCode = async (type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
         if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
             setMenuKeys([]);
             setCode('');
             openedScriptIndexRef.current = null;
         }
-        scriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].splice(index, 1);
-        setScriptConfig(prev => ({ ...prev }));
-    }, [scriptConfig]);
-    const openCode = useCallback((type: 'recv' | 'send', index: number) => {
+        let newScriptConfig = { ...scriptConfigRef.current };
+        newScriptConfig[type === 'recv' ? 'recv_script' : 'send_script'].splice(index, 1);
+        try {
+            await invoke('save_script_config', { newConfig: newScriptConfig });
+        } catch (error) {
+            console.error('Failed to save script config:', error);
+        }
+        setScriptConfig(newScriptConfig);
+    };
+
+    const openCode = (type: 'recv' | 'send', index: number) => {
         const currentOpened = openedScriptIndexRef.current;
         const hasChanges = isCodeModifiedRef.current;
         if (currentOpened && currentOpened.type === type && currentOpened.index === index) {
@@ -262,8 +283,8 @@ const EditorPage: React.FC = () => {
         }
 
         const nextCode = type === 'recv'
-            ? (scriptConfig.recv_script[index]?.[1] ?? '')
-            : (scriptConfig.send_script[index]?.[1] ?? '');
+            ? (scriptConfigRef.current.recv_script[index]?.[1] ?? '')
+            : (scriptConfigRef.current.send_script[index]?.[1] ?? '');
 
         const applyOpen = () => {
             setCode(nextCode);
@@ -300,7 +321,7 @@ const EditorPage: React.FC = () => {
         }
 
         applyOpen();
-    }, [scriptConfig]);
+    };
 
     const items: MenuProps['items'] = useMemo(() => [
         {

@@ -70,7 +70,7 @@ pub fn run() {
             open_and_activate_editor,
             close_editor,
             load_script_config,
-            update_script_config
+            save_script_config
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");
@@ -486,6 +486,6 @@ async fn load_script_config() -> Result<config::ScriptConfig, String> {
 }
 
 #[tauri::command]
-async fn update_script_config(new_config: config::ScriptConfig) -> Result<(), String> {
+async fn save_script_config(new_config: config::ScriptConfig) -> Result<(), String> {
     config::ScriptConfig::save(&new_config)
 }
