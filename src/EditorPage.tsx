@@ -347,7 +347,7 @@ const EditorPage: React.FC = () => {
     const cmItems: MenuProps['items'] = useMemo(() => [
         { key: '1', label: '复制', icon: <CopyOutlined />, onClick: onCopyCode, disabled: !cmSelected },
         { key: '2', label: '剪切', icon: <ScissorOutlined />, onClick: onCutCode, disabled: !cmSelected },
-        { key: '3', label: '粘贴', icon: <DeleteOutlined />, onClick: onPasteCode },
+        { key: '3', label: '粘贴', icon: <SnippetsOutlined />, onClick: onPasteCode },
         { key: '4', label: '格式化', icon: <FormatPainterOutlined />, onClick: formatCode },
     ], [formatCode, cmSelected, onCopyCode, onCutCode, onPasteCode]);
 
@@ -458,22 +458,22 @@ const EditorPage: React.FC = () => {
                         <Button className="all-button" disabled={!isCodeModified || !hasOpened} onClick={saveCode} title="保存代码(Ctrl+S)">
                             <SaveOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onUndo} disabled={!undoAvailable} title="撤销(Ctrl+Z)">
+                        <Button className="all-button" onClick={onUndo} disabled={!undoAvailable || !hasOpened} title="撤销(Ctrl+Z)">
                             <UndoOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onRedo} disabled={!redoAvailable} title="重做(Ctrl+Y)">
+                        <Button className="all-button" onClick={onRedo} disabled={!redoAvailable || !hasOpened} title="重做(Ctrl+Y)">
                             <RedoOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onCopyCode} disabled={!cmSelected} title="复制(Ctrl+C)">
+                        <Button className="all-button" onClick={onCopyCode} disabled={!cmSelected || !hasOpened} title="复制(Ctrl+C)">
                             <CopyOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onCutCode} disabled={!cmSelected} title="剪切(Ctrl+X)">
+                        <Button className="all-button" onClick={onCutCode} disabled={!cmSelected || !hasOpened} title="剪切(Ctrl+X)">
                             <ScissorOutlined />
                         </Button>
-                        <Button className="all-button" onClick={onPasteCode} title="粘贴(Ctrl+V)">
+                        <Button className="all-button" onClick={onPasteCode} title="粘贴(Ctrl+V)" disabled={!hasOpened}>
                             <SnippetsOutlined />
                         </Button>
-                        <Button className="all-button" onClick={formatCode} title="格式化(Alt+Shift+F)">
+                        <Button className="all-button" onClick={formatCode} title="格式化(Alt+Shift+F)" disabled={!hasOpened}>
                             <FormatPainterOutlined />
                         </Button>
                     </Layout.Header>
