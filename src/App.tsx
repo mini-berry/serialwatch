@@ -12,12 +12,13 @@ import type { MenuInfo } from '@rc-component/menu/lib/interface';
 import { message } from 'antd';
 import { invoke } from '@tauri-apps/api/core';
 import { listen } from '@tauri-apps/api/event';
+import { writeText } from '@tauri-apps/plugin-clipboard-manager';
 
 interface OutLine {
   raw_data?: Uint8Array;
   content: string;
   color?: string;
-  type: 'send' | 'receive';
+  type: 'send' | 'receive' | 'info';
 }
 
 interface SerialConfig {
@@ -63,7 +64,8 @@ const SerialDebugger: React.FC = () => {
   const [send_count, setSendCount] = useState<number>(0);
   // 接收显示HTML
   const [receive_text, setReceiveText] = useState<OutLine[]>([]);
-  const [need_scroll, setNeedScroll] = useState<boolean>(false);
+  // const [need_scroll, setNeedScroll] = useState<boolean>(false);
+  const need_scroll_ref = useRef(false);
   // 自动断帧
   const last_receive_time_ref = useRef<number>(0);
   const auto_frame_ref = useRef(true);
@@ -85,7 +87,6 @@ const SerialDebugger: React.FC = () => {
   const [timerRunning, setTimerRunning] = useState(false); // 控制定时器状态
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
-  const sendMsgRef = useRef<() => Promise<void> | void>(() => undefined);
 
   // 串口配置
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
@@ -100,9 +101,11 @@ const SerialDebugger: React.FC = () => {
     rts: false,
   });
 
-  //脚本
-  const [recv_script, setRecvScript] = useState<boolean>(false);
-  const [send_script, setSendScript] = useState<boolean>(false);
+  //脚本配置
+  const recv_script_enable_ref = useRef(false);
+  const send_script_enable_ref = useRef(false);
+  const recv_script_ref = useRef<string>('');
+  const send_script_ref = useRef<string>('');
   const [script_config, setScriptConfig] = useState<ScriptConfig>({ recv_script: [], send_script: [] });
   // 打开设置界面
   const openSettings = async () => {
@@ -115,8 +118,8 @@ const SerialDebugger: React.FC = () => {
   // 处理定时发送逻辑
   useEffect(() => {
     if (timerRunning) {
-      timerRef.current = setInterval(() => {
-        void sendMsgRef.current();
+      timerRef.current = setInterval(async () => {
+        await send_msg();
       }, timerInterval);
     }
 
@@ -129,7 +132,7 @@ const SerialDebugger: React.FC = () => {
   }, [timerRunning, timerInterval]);
   // 处理滚动逻辑
   useEffect(() => {
-    if (need_scroll) {
+    if (need_scroll_ref.current) {
       const showSection = document.getElementById('show-section');
       if (showSection) {
         const targetTop = showSection.scrollHeight - showSection.clientHeight;
@@ -138,7 +141,7 @@ const SerialDebugger: React.FC = () => {
           behavior: 'instant'
         });
       }
-      setNeedScroll(false);
+      need_scroll_ref.current = false;
     }
   }, [receive_text]);
   const [messageApi, messageHolder] = message.useMessage();
@@ -203,7 +206,7 @@ const SerialDebugger: React.FC = () => {
         const uint8Data = new Uint8Array(data);
         const showSection = document.getElementById('show-section');
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
-        setNeedScroll(nowOnBottom);
+        need_scroll_ref.current = nowOnBottom;
         setReceiveCount((prev) => prev + uint8Data.length);
         setReceiveText((prev) => {
           if (prev.length > 1000) {
@@ -361,7 +364,7 @@ const SerialDebugger: React.FC = () => {
   const send_message_display = (msg: string) => {
     if (serial_config.open_status) {
       setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
-      setNeedScroll(true);
+      need_scroll_ref.current = true;
     }
   };
 
@@ -505,30 +508,27 @@ const SerialDebugger: React.FC = () => {
     }
   };
 
-  useEffect(() => {
-    sendMsgRef.current = send_msg;
-  }, [send_msg]);
-
   const [secMenuOpen, setSecMenuOpen] = useState(false);
-  const [selectedText, setSelectedText] = useState<string>('');
+  const selectedTextRef = useRef<string>('');
   const [selectedBool, setSelectedBool] = useState(false);
   const copySelectedText = async () => {
+    const selectedText = selectedTextRef.current;
     if (selectedText.length > 0) {
-      await navigator.clipboard.writeText(selectedText);
+      await writeText(selectedText);
     }
   }
 
   const copyAllText = async () => {
     const allText = receive_text.map(line => line.content).join('\n');
     if (allText.length > 0) {
-      await navigator.clipboard.writeText(allText);
+      await writeText(allText);
     }
   }
 
   const copyLineText = async (line: number) => {
     const lineContent = receive_text[line]?.content || '';
     if (lineContent.length > 0) {
-      await navigator.clipboard.writeText(lineContent);
+      await writeText(lineContent);
     }
   }
 
@@ -539,6 +539,7 @@ const SerialDebugger: React.FC = () => {
   }
 
   const copyToSendArea = () => {
+    const selectedText = selectedTextRef.current;
     if (selectedText.length > 3) {
       let textToCopy = selectedText.trim();
       const regex = /^[0-9A-F]{2}(?: [0-9A-F]{2})*$/;
@@ -757,12 +758,12 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox checked={recv_script} onChange={(e) => { setRecvScript(e.target.checked) }}>
+                <Checkbox onChange={(e) => { recv_script_enable_ref.current = e.target.checked }}>
                   脚本
                 </Checkbox>
                 <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
-                })} />
+                })} onSelect={(e) => recv_script_ref.current = e} />
                 <Button className='edit-button' onClick={openEditor}>
                   <EditOutlined />
                 </Button>
@@ -842,12 +843,12 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox checked={send_script} onChange={(e) => { setSendScript(e.target.checked) }}>
+                <Checkbox onChange={(e) => { send_script_enable_ref.current = e.target.checked }}>
                   脚本
                 </Checkbox>
                 <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
-                })} />
+                })} onSelect={(value) => { send_script_ref.current = value }} />
                 <Button className='edit-button' onClick={openEditor}>
                   <EditOutlined />
                 </Button>
@@ -885,7 +886,7 @@ const SerialDebugger: React.FC = () => {
                           onContextMenu={(e) => {
                             e.stopPropagation(); setSecMenuOpen(false);
                             let selection = window.getSelection()?.toString() || '';
-                            setSelectedText(selection);
+                            selectedTextRef.current = selection;
                             setSelectedBool(selection.length > 0);
                           }
                           }
