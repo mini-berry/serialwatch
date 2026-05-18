@@ -214,6 +214,7 @@ body {
   padding-right: 2px;
   border-radius: 3px;
   transition: background-color 0.2s ease;
+  white-space: pre-wrap;
 }
 
 .output-div:hover {

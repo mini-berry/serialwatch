@@ -64,7 +64,6 @@ const SerialDebugger: React.FC = () => {
   const [send_count, setSendCount] = useState<number>(0);
   // 接收显示HTML
   const [receive_text, setReceiveText] = useState<OutLine[]>([]);
-  // const [need_scroll, setNeedScroll] = useState<boolean>(false);
   const need_scroll_ref = useRef(false);
   // 自动断帧
   const last_receive_time_ref = useRef<number>(0);
@@ -174,6 +173,18 @@ const SerialDebugger: React.FC = () => {
       }
     });
 
+    const appendLogLine = (log: string, color?: string) => {
+      setReceiveText((prev) => [...prev, { content: log, type: 'info', color: color }]);
+    }
+
+    function print_logline(log: string, color?: string) {
+      appendLogLine(log, color);
+      const showSection = document.getElementById('show-section');
+      const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
+      need_scroll_ref.current = nowOnBottom;
+      console.log('脚本执行成功');
+    }
+
     // 加载脚本配置
     invoke('load_script_config').then((scripts) => {
       let scriptsConfig = scripts as ScriptConfig || { recv_script: [], send_script: [] };
@@ -208,6 +219,7 @@ const SerialDebugger: React.FC = () => {
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
         need_scroll_ref.current = nowOnBottom;
         setReceiveCount((prev) => prev + uint8Data.length);
+        // 数据过多时自动清理
         setReceiveText((prev) => {
           if (prev.length > 1000) {
             return prev.slice(prev.length - 1000);
@@ -226,6 +238,13 @@ const SerialDebugger: React.FC = () => {
           }
           return prev;
         });
+        if (recv_script_enable_ref.current && recv_script_ref.current) {
+          const get_data = () => new Uint8Array(uint8Data);
+
+          const scriptString = 'try{' + recv_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+          new Function('print_logline', 'get_data', 'console', scriptString)(print_logline, get_data, console);
+          return;
+        }
         // 关闭十六进制显示
         if (!hex_show_ref.current) {
           setReceiveText((prev) => {
@@ -617,6 +636,8 @@ const SerialDebugger: React.FC = () => {
     icon: <ClearOutlined />,
   },
   ];
+
+
   return (
     <ConfigProvider
       theme={{
@@ -758,10 +779,12 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox onChange={(e) => { recv_script_enable_ref.current = e.target.checked }}>
+                <Checkbox onChange={(e) => {
+                  recv_script_enable_ref.current = e.target.checked
+                }}>
                   脚本
                 </Checkbox>
-                <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
+                <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[1] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
                 })} onSelect={(e) => recv_script_ref.current = e} />
                 <Button className='edit-button' onClick={openEditor}>
@@ -843,10 +866,12 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox onChange={(e) => { send_script_enable_ref.current = e.target.checked }}>
+                <Checkbox onChange={(e) => {
+                  send_script_enable_ref.current = e.target.checked
+                }}>
                   脚本
                 </Checkbox>
-                <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[0] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
+                <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[1] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
                   setScriptConfig(scripts as ScriptConfig);
                 })} onSelect={(value) => { send_script_ref.current = value }} />
                 <Button className='edit-button' onClick={openEditor}>

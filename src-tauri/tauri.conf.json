@@ -23,7 +23,8 @@
     ],
     "security": {
       "csp": {
-        "style-src": "'self' 'unsafe-inline'"
+        "default-src": "'self'",
+        "script-src": "'self' 'unsafe-eval' 'unsafe-inline'"
       }
     }
   },
