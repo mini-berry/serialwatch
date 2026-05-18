@@ -77,7 +77,11 @@ const SerialDebugger: React.FC = () => {
   // 十六进制发送
   const [hex_send, setHexSend] = useState<boolean>(false);
   // 输入文本框
-  const [send_data, setSendData] = useState<string>('');
+  const [sendText_data, setSendTextData] = useState<string>('');
+  const sendText_data_ref = useRef(sendText_data);
+  useEffect(() => {
+    sendText_data_ref.current = sendText_data;
+  }, [sendText_data]);
   const inputRef = useRef<TextAreaRef>(null);
   // 串口列表
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
@@ -99,6 +103,10 @@ const SerialDebugger: React.FC = () => {
     dtr: false,
     rts: false,
   });
+  const serial_config_ref = useRef(serial_config);
+  useEffect(() => {
+    serial_config_ref.current = serial_config;
+  }, [serial_config]);
 
   //脚本配置
   const recv_script_enable_ref = useRef(false);
@@ -112,6 +120,25 @@ const SerialDebugger: React.FC = () => {
   }
   const openEditor = async () => {
     await invoke('open_and_activate_editor');
+  }
+
+  const appendLogLine = (log: string, color?: string) => {
+    setReceiveText((prev) => [...prev, { content: log, type: 'info', color: color }]);
+  }
+
+  function print_logline(log: string, color?: string) {
+    appendLogLine(log, color);
+    const showSection = document.getElementById('show-section');
+    const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
+    need_scroll_ref.current = nowOnBottom;
+  }
+
+  function send_data(data: Uint8Array) {
+    if (!serial_config_ref.current.open_status || data.length === 0) {
+      return;
+    }
+    setSendCount((prev) => prev + data.length);
+    invoke('send_msg', { msg: data });
   }
 
   // 处理定时发送逻辑
@@ -173,18 +200,6 @@ const SerialDebugger: React.FC = () => {
       }
     });
 
-    const appendLogLine = (log: string, color?: string) => {
-      setReceiveText((prev) => [...prev, { content: log, type: 'info', color: color }]);
-    }
-
-    function print_logline(log: string, color?: string) {
-      appendLogLine(log, color);
-      const showSection = document.getElementById('show-section');
-      const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
-      need_scroll_ref.current = nowOnBottom;
-      console.log('脚本执行成功');
-    }
-
     // 加载脚本配置
     invoke('load_script_config').then((scripts) => {
       let scriptsConfig = scripts as ScriptConfig || { recv_script: [], send_script: [] };
@@ -242,7 +257,7 @@ const SerialDebugger: React.FC = () => {
           const get_data = () => new Uint8Array(uint8Data);
 
           const scriptString = 'try{' + recv_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
-          new Function('print_logline', 'get_data', 'console', scriptString)(print_logline, get_data, console);
+          new Function('print_logline', 'get_data', 'console', 'send_data', scriptString)(print_logline, get_data, console, send_data);
           return;
         }
         // 关闭十六进制显示
@@ -447,7 +462,7 @@ const SerialDebugger: React.FC = () => {
         newCursorPos = charCount + spaceCount;
       }
 
-      setSendData(formattedValue);
+      setSendTextData(formattedValue);
 
       setTimeout(() => {
         if (inputRef.current) {
@@ -459,13 +474,13 @@ const SerialDebugger: React.FC = () => {
       }, 0);
     }
     else
-      setSendData(e.target.value);
+      setSendTextData(e.target.value);
   };
 
   const hex_send_change = (e: CheckboxChangeEvent) => {
     setHexSend(e.target.checked);
     if (!e.target.checked) {
-      let hexString = send_data.replace(/\s+/g, '');
+      let hexString = sendText_data.replace(/\s+/g, '');
       if (hexString.length % 2 !== 0) {
         hexString = hexString.slice(0, -1) + '0' + hexString.slice(-1);
       }
@@ -479,46 +494,58 @@ const SerialDebugger: React.FC = () => {
       const decoder = new TextDecoder('utf-8', { fatal: false });
       const uint8Array = new Uint8Array(bytes);
       let decodedString = decoder.decode(uint8Array);
-      setSendData(decodedString.replace(/\uFFFD/g, ' '));
+      setSendTextData(decodedString.replace(/\uFFFD/g, ' '));
     }
     else {
       const encoder = new TextEncoder();
-      const uint8Array = encoder.encode(send_data);
+      const uint8Array = encoder.encode(sendText_data);
       const hexString = Array.from(uint8Array)
         .map((byte) => byte.toString(16).padStart(2, '0').toUpperCase())
         .join(' ');
-      setSendData(hexString);
+      setSendTextData(hexString);
     }
   };
 
   const send_msg = async () => {
-    if (!serial_config.open_status || send_data.length === 0) {
+    if (!serial_config_ref.current.open_status || sendText_data_ref.current.length === 0) {
       return;
     }
+
     if (!hex_send) {
-      let data = new TextEncoder().encode(send_data);
-      if (show_send_message_ref.current && data.length > 0) {
-        send_message_display(send_data);
-      }
+      let data = new TextEncoder().encode(sendText_data_ref.current);
       setSendCount((prev) => prev + data.length);
+      if (send_script_enable_ref.current && send_script_ref.current) {
+        const get_send_data = () => new Uint8Array(data);
+        const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+        new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+        return;
+      }
+      if (show_send_message_ref.current && data.length > 0) {
+        send_message_display(sendText_data_ref.current);
+      }
       await invoke('send_msg', { msg: data });
     }
     else {
-      const hexString = send_data.replace(/\s+/g, '');
+      const hexString = sendText_data_ref.current.replace(/\s+/g, '');
       const bytes = [];
       for (let i = 0; i < hexString.length; i += 2) {
         const byteVal = parseInt(hexString.slice(i, i + 2), 16);
         bytes.push(isNaN(byteVal) ? 0 : byteVal);
       }
       const uint8Array = new Uint8Array(bytes);
+      if (send_script_enable_ref.current && send_script_ref.current) {
+        const get_send_data = () => new Uint8Array(uint8Array);
+        const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+        new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+        return;
+      }
       if (show_send_message_ref.current) {
-
         if (hexString.length % 2 !== 0) {
-          const displayString = (send_data.slice(0, -1) + '0' + send_data.slice(-1));
+          const displayString = (sendText_data_ref.current.slice(0, -1) + '0' + sendText_data_ref.current.slice(-1));
           send_message_display(displayString);
         }
         else {
-          const displayString = send_data;
+          const displayString = sendText_data_ref.current;
           send_message_display(displayString);
         }
       }
@@ -563,10 +590,10 @@ const SerialDebugger: React.FC = () => {
       let textToCopy = selectedText.trim();
       const regex = /^[0-9A-F]{2}(?: [0-9A-F]{2})*$/;
       setHexSend(regex.test(textToCopy));
-      setSendData(textToCopy);
+      setSendTextData(textToCopy);
     }
     else
-      setSendData(selectedText);
+      setSendTextData(selectedText);
   }
 
   const secMenu: MenuProps['items'] = [{
@@ -928,7 +955,7 @@ const SerialDebugger: React.FC = () => {
                   <Input.TextArea onContextMenu={(e) => e.stopPropagation()}
                     ref={inputRef}
                     autoSize={{ minRows: 5, maxRows: 5 }}
-                    value={send_data}
+                    value={sendText_data}
                     onChange={input_change}
                     className="text-area"
                     placeholder="请输入文本..."

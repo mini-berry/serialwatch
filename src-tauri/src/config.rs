@@ -80,6 +80,79 @@ impl ScriptConfig {
         Ok(config_path)
     }
 
+    fn get_default_config() -> Self {
+        ScriptConfig {
+            recv_script: vec![
+                (
+                    "Add timestamp".to_string(),
+                    r#"const d = new Date();
+const pad = (n) => String(n).padStart(2, '0');
+const time =
+  d.getFullYear() +
+  '-' +
+  pad(d.getMonth() + 1) +
+  '-' +
+  pad(d.getDate()) +
+  ' ' +
+  pad(d.getHours()) +
+  ':' +
+  pad(d.getMinutes()) +
+  ':' +
+  pad(d.getSeconds());
+const data = get_data();
+const str = time + '\n' + new TextDecoder().decode(data);
+print_logline(str);"#
+                        .to_string(),
+                ),
+                (
+                    "Reply".to_string(),
+                    r#"const data = get_data();
+print_logline(data.join(' '));
+console.log(data);
+if (JSON.stringify(Array.from(data)) === JSON.stringify([49, 50, 51])) {
+  send_data([1, 2, 3]);
+  print_logline('1 2 3');
+}"#
+                    .to_string(),
+                ),
+            ],
+            send_script: vec![
+                (
+                    "Add \\n".to_string(),
+                    r#"const data = get_send_data();
+const result = new Uint8Array(data.length + 1);
+result.set(data);
+result.set([10], data.length);
+send_data(result);
+const str = new TextDecoder().decode(data);
+print_logline(str);"#
+                        .to_string(),
+                ),
+                (
+                    "Add timestamp".to_string(),
+                    r#"const d = new Date();
+const pad = (n) => String(n).padStart(2, '0');
+const time =
+  d.getFullYear() +
+  '-' +
+  pad(d.getMonth() + 1) +
+  '-' +
+  pad(d.getDate()) +
+  ' ' +
+  pad(d.getHours()) +
+  ':' +
+  pad(d.getMinutes()) +
+  ':' +
+  pad(d.getSeconds());
+const data = get_send_data();
+send_data(data);
+const str = time + '\n' + new TextDecoder().decode(data);
+print_logline(str, 'yellow');"#
+                        .to_string(),
+                ),
+            ],
+        }
+    }
     // 加载配置文件
     pub fn load() -> Result<Self, String> {
         let config_path = Self::get_config_path()?;
@@ -97,10 +170,7 @@ impl ScriptConfig {
             Ok(config)
         } else {
             // 配置文件不存在，创建默认配置
-            let default_config = ScriptConfig {
-                recv_script: Vec::new(),
-                send_script: Vec::new(),
-            };
+            let default_config = Self::get_default_config();
             ScriptConfig::save(&default_config)?;
             Ok(default_config)
         }
