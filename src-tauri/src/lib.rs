@@ -273,7 +273,9 @@ async fn serial_thread(
                 });
             data_buffer.clear();
         }
-        tokio::time::sleep(std::time::Duration::from_millis(5)).await;
+        if data_interrupt {
+            tokio::time::sleep(std::time::Duration::from_millis(100)).await;
+        }
     }
     #[cfg(debug_assertions)]
     eprintln!("Serial thread exiting.");

@@ -14,7 +14,6 @@
         "@uiw/codemirror-theme-vscode": "^4.25.9",
         "@uiw/react-codemirror": "^4.25.9",
         "antd": "^6.4.2",
-        "comlink": "^4.4.2",
         "path": "^0.12.7",
         "prettier": "^3.8.3",
         "react": "^19.2.6",
@@ -382,8 +381,6 @@
     "clsx": ["clsx@2.1.1", "https://registry.npmmirror.com/clsx/-/clsx-2.1.1.tgz", {}, "sha512-eYm0QWBtUrBWZWG0d386OGAw16Z995PiOVo2B7bjWSbHedGl5e0ZWaq65kOGgUSNesEIDkB9ISbTg/JK9dhCZA=="],
 
     "codemirror": ["codemirror@6.0.2", "https://registry.npmmirror.com/codemirror/-/codemirror-6.0.2.tgz", { "dependencies": { "@codemirror/autocomplete": "^6.0.0", "@codemirror/commands": "^6.0.0", "@codemirror/language": "^6.0.0", "@codemirror/lint": "^6.0.0", "@codemirror/search": "^6.0.0", "@codemirror/state": "^6.0.0", "@codemirror/view": "^6.0.0" } }, "sha512-VhydHotNW5w1UGK0Qj96BwSk/Zqbp9WbnyK2W/eVMv4QyF41INRGpjUhFJY7/uDNuudSc33a/PKr4iDqRduvHw=="],
-
-    "comlink": ["comlink@4.4.2", "https://registry.npmmirror.com/comlink/-/comlink-4.4.2.tgz", {}, "sha512-OxGdvBmJuNKSCMO4NTl1L47VRp6xn2wG4F/2hYzB6tiCb709otOxtEYCSvK80PtjODfXXZu8ds+Nw5kVCjqd2g=="],
 
     "compute-scroll-into-view": ["compute-scroll-into-view@3.1.1", "https://registry.npmmirror.com/compute-scroll-into-view/-/compute-scroll-into-view-3.1.1.tgz", {}, "sha512-VRhuHOLoKYOy4UbilLbUzbYg93XLjv2PncJC50EuTWPA3gaja1UjBsUP/D/9/juV3vQFr6XBEzn9KCAHdUvOHw=="],
 

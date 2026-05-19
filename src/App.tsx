@@ -82,6 +82,8 @@ const SerialDebugger: React.FC = () => {
   useEffect(() => {
     sendText_data_ref.current = sendText_data;
   }, [sendText_data]);
+  const sendMsgRef = useRef<() => Promise<void>>(async () => { });
+  const sendingRef = useRef(false);
   const inputRef = useRef<TextAreaRef>(null);
   // 串口列表
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
@@ -145,7 +147,7 @@ const SerialDebugger: React.FC = () => {
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(async () => {
-        await send_msg();
+        await sendMsgRef.current();
       }, timerInterval);
     }
 
@@ -173,9 +175,11 @@ const SerialDebugger: React.FC = () => {
   const [messageApi, messageHolder] = message.useMessage();
   // 初始化
   useEffect(() => {
+    const isMountedRef = { current: true };
 
     // 扫描串口并加载配置
     invoke('scan_serial').then((devices) => {
+      if (!isMountedRef.current) return;
       let deviceList = devices as Array<SerialDevice>;
       setSerialList(deviceList);
 
@@ -183,8 +187,19 @@ const SerialDebugger: React.FC = () => {
       const savedConfigString = localStorage.getItem('serialConfig');
       if (savedConfigString) {
         try {
-          savedConfig = JSON.parse(savedConfigString) as SerialConfig;
-          savedConfig.open_status = false;
+          const defaultSerialConfig: SerialConfig = {
+            port: '',
+            baud: 9600,
+            data_bits: 8,
+            parity: 'None',
+            stop_bits: 1,
+            flow_control: 'None',
+            open_status: false,
+            dtr: false,
+            rts: false,
+          };
+          const parsed = JSON.parse(savedConfigString) as SerialConfig;
+          savedConfig = { ...defaultSerialConfig, ...parsed, open_status: false };
         } catch (e) {
         }
       }
@@ -202,6 +217,7 @@ const SerialDebugger: React.FC = () => {
 
     // 加载脚本配置
     invoke('load_script_config').then((scripts) => {
+      if (!isMountedRef.current) return;
       let scriptsConfig = scripts as ScriptConfig || { recv_script: [], send_script: [] };
       setScriptConfig(scriptsConfig);
     });
@@ -309,6 +325,7 @@ const SerialDebugger: React.FC = () => {
 
     setupListeners();
     return () => {
+      isMountedRef.current = false;
       isMounted = [false, false, false];
       if (unlistenDataUpdated) {
         unlistenDataUpdated();
@@ -396,7 +413,7 @@ const SerialDebugger: React.FC = () => {
   };
 
   const send_message_display = (msg: string) => {
-    if (serial_config.open_status) {
+    if (serial_config_ref.current.open_status) {
       setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
       need_scroll_ref.current = true;
     }
@@ -409,10 +426,10 @@ const SerialDebugger: React.FC = () => {
   };
 
   const open_serial = async () => {
-    if (serial_list.some(device => device.port === serial_config.port)) {
+    if (serial_list.some(device => device.port === serial_config_ref.current.port)) {
       const nextConfig = {
-        ...serial_config,
-        open_status: !serial_config.open_status,
+        ...serial_config_ref.current,
+        open_status: !serial_config_ref.current.open_status,
       };
       setSerialConfig(nextConfig);
       await invoke('update_config', { newConfig: nextConfig });
@@ -427,13 +444,14 @@ const SerialDebugger: React.FC = () => {
 
   const config_change = async <K extends keyof SerialConfig>(key: K, value: SerialConfig[K]) => {
     const nextConfig = {
-      ...serial_config,
+      ...serial_config_ref.current,
       [key]: value,
     };
     localStorage.setItem('serialConfig', JSON.stringify(nextConfig));
     setSerialConfig(nextConfig);
-    if (serial_config.open_status)
+    if (serial_config_ref.current.open_status) {
       await invoke('update_config', { newConfig: nextConfig });
+    }
   };
 
   const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
@@ -507,52 +525,64 @@ const SerialDebugger: React.FC = () => {
   };
 
   const send_msg = async () => {
+    if (sendingRef.current) {
+      return;
+    }
     if (!serial_config_ref.current.open_status || sendText_data_ref.current.length === 0) {
       return;
     }
 
-    if (!hex_send) {
-      let data = new TextEncoder().encode(sendText_data_ref.current);
-      setSendCount((prev) => prev + data.length);
-      if (send_script_enable_ref.current && send_script_ref.current) {
-        const get_send_data = () => new Uint8Array(data);
-        const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
-        new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
-        return;
-      }
-      if (show_send_message_ref.current && data.length > 0) {
-        send_message_display(sendText_data_ref.current);
-      }
-      await invoke('send_msg', { msg: data });
-    }
-    else {
-      const hexString = sendText_data_ref.current.replace(/\s+/g, '');
-      const bytes = [];
-      for (let i = 0; i < hexString.length; i += 2) {
-        const byteVal = parseInt(hexString.slice(i, i + 2), 16);
-        bytes.push(isNaN(byteVal) ? 0 : byteVal);
-      }
-      const uint8Array = new Uint8Array(bytes);
-      if (send_script_enable_ref.current && send_script_ref.current) {
-        const get_send_data = () => new Uint8Array(uint8Array);
-        const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
-        new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
-        return;
-      }
-      if (show_send_message_ref.current) {
-        if (hexString.length % 2 !== 0) {
-          const displayString = (sendText_data_ref.current.slice(0, -1) + '0' + sendText_data_ref.current.slice(-1));
-          send_message_display(displayString);
+    sendingRef.current = true;
+    try {
+      if (!hex_send) {
+        let data = new TextEncoder().encode(sendText_data_ref.current);
+        setSendCount((prev) => prev + data.length);
+        if (send_script_enable_ref.current && send_script_ref.current) {
+          const get_send_data = () => new Uint8Array(data);
+          const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+          new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+          return;
         }
-        else {
-          const displayString = sendText_data_ref.current;
-          send_message_display(displayString);
+        if (show_send_message_ref.current && data.length > 0) {
+          send_message_display(sendText_data_ref.current);
         }
+        await invoke('send_msg', { msg: data });
       }
-      setSendCount((prev) => prev + uint8Array.length);
-      await invoke('send_msg', { msg: uint8Array });
+      else {
+        const hexString = sendText_data_ref.current.replace(/\s+/g, '');
+        const bytes = [];
+        for (let i = 0; i < hexString.length; i += 2) {
+          const byteVal = parseInt(hexString.slice(i, i + 2), 16);
+          bytes.push(isNaN(byteVal) ? 0 : byteVal);
+        }
+        const uint8Array = new Uint8Array(bytes);
+        if (send_script_enable_ref.current && send_script_ref.current) {
+          const get_send_data = () => new Uint8Array(uint8Array);
+          const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+          new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+          return;
+        }
+        if (show_send_message_ref.current) {
+          if (hexString.length % 2 !== 0) {
+            const displayString = (sendText_data_ref.current.slice(0, -1) + '0' + sendText_data_ref.current.slice(-1));
+            send_message_display(displayString);
+          }
+          else {
+            const displayString = sendText_data_ref.current;
+            send_message_display(displayString);
+          }
+        }
+        setSendCount((prev) => prev + uint8Array.length);
+        await invoke('send_msg', { msg: uint8Array });
+      }
+    } finally {
+      sendingRef.current = false;
     }
   };
+
+  useEffect(() => {
+    sendMsgRef.current = send_msg;
+  }, [send_msg]);
 
   const [secMenuOpen, setSecMenuOpen] = useState(false);
   const selectedTextRef = useRef<string>('');
