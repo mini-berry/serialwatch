@@ -449,7 +449,10 @@ async fn open_and_activate_about(
 }
 
 #[tauri::command]
-async fn open_and_activate_editor(app_handle: tauri::AppHandle) {
+async fn open_and_activate_editor(
+    app_handle: tauri::AppHandle,
+    webview_window: tauri::WebviewWindow,
+) {
     // 1. 尝试获取已存在的窗口，避免重复创建
     if let Some(window) = app_handle.get_webview_window("editor") {
         // 如果窗口存在，则激活它
@@ -468,6 +471,8 @@ async fn open_and_activate_editor(app_handle: tauri::AppHandle) {
     .inner_size(800.0, 600.0)
     .min_inner_size(600.0, 400.0)
     .center()
+    .parent(&webview_window)
+    .unwrap()
     .build();
 }
 
