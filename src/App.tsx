@@ -536,13 +536,13 @@ const SerialDebugger: React.FC = () => {
     try {
       if (!hex_send) {
         let data = new TextEncoder().encode(sendText_data_ref.current);
-        setSendCount((prev) => prev + data.length);
         if (send_script_enable_ref.current && send_script_ref.current) {
           const get_send_data = () => new Uint8Array(data);
           const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
           new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
           return;
         }
+        setSendCount((prev) => prev + data.length);
         if (show_send_message_ref.current && data.length > 0) {
           send_message_display(sendText_data_ref.current);
         }
