@@ -192,11 +192,11 @@ print_logline(str, 'yellow');"#
     }
 
     fn limit_script_number(&mut self) {
-        if self.recv_script.len() > 20 {
-            self.recv_script.truncate(20);
+        if self.recv_script.len() > 50 {
+            self.recv_script.truncate(50);
         }
-        if self.send_script.len() > 20 {
-            self.send_script.truncate(20);
+        if self.send_script.len() > 50 {
+            self.send_script.truncate(50);
         }
     }
     // 保存配置文件
