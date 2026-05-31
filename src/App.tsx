@@ -560,14 +560,15 @@ const SerialDebugger: React.FC = () => {
     if (!serial_config_ref.current.open_status || sendText_data_ref.current.length === 0) {
       return;
     }
-
     sendingRef.current = true;
     try {
       if (!checkMemoryRef.current.hex_send) {
         let data = new TextEncoder().encode(sendText_data_ref.current);
+        console.log(send_script_enable_ref.current, send_script_ref.current);
         if (send_script_enable_ref.current && send_script_ref.current) {
           const get_send_data = () => new Uint8Array(data);
           const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+          console.log('执行发送脚本', scriptString);
           new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
           return;
         }
@@ -865,9 +866,7 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox onChange={(e) => {
-                  setCheckMemory((prev) => { const newMem = { ...prev, recv_script_enable: e.target.checked }; saveMemoryToLocal(newMem); return newMem; });
-                }}>
+                <Checkbox onChange={(e) => { recv_script_enable_ref.current = e.target.checked; }}>
                   脚本
                 </Checkbox>
                 <Select className='script-select' options={script_config.recv_script.map((v) => ({ label: v[0], value: v[1] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
@@ -952,9 +951,7 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox onChange={(e) => {
-                  setCheckMemory((prev) => { const newMem = { ...prev, send_script_enable: e.target.checked }; saveMemoryToLocal(newMem); return newMem; });
-                }}>
+                <Checkbox onChange={(e) => { send_script_enable_ref.current = e.target.checked; }}>
                   脚本
                 </Checkbox>
                 <Select className='script-select' options={script_config.send_script.map((v) => ({ label: v[0], value: v[1] }))} onOpenChange={() => invoke('load_script_config').then((scripts) => {
