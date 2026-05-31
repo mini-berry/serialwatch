@@ -21,6 +21,17 @@ interface OutLine {
   type: 'send' | 'receive' | 'info';
 }
 
+interface CheckMemory {
+  hex_show?: boolean;
+  hex_send?: boolean;
+  auto_frame?: boolean;
+  show_send?: boolean;
+  auto_frame_time?: number;
+  send_color?: string;
+  auto_send_time?: number;
+  timer_interval?: number;
+}
+
 interface SerialConfig {
   port: string;
   baud: number;
@@ -54,11 +65,28 @@ const SerialDebugger: React.FC = () => {
     return localStorage.getItem('darkMode') === 'true';
   };
 
+  const [check_memory, setCheckMemory] = useState<CheckMemory>(
+    {
+      hex_show: false,
+      hex_send: false,
+      auto_frame: true,
+      show_send: false,
+      auto_frame_time: 100,
+      send_color: '#31a9ff',
+      auto_send_time: 1000,
+      timer_interval: 100000,
+    }
+  )
+
+  const check_memory_ref = useRef(check_memory);
+  useEffect(() => {
+    check_memory_ref.current = check_memory;
+    localStorage.setItem('checkMemory', JSON.stringify(check_memory));
+  }, [check_memory]);
+
   // local配置监控启用
   const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
-  // 颜色选择器
-  const [color, setColor] = useState<string>('#31a9ff');
   // 发送接收计数
   const [receive_count, setReceiveCount] = useState<number>(0);
   const [send_count, setSendCount] = useState<number>(0);
@@ -68,14 +96,6 @@ const SerialDebugger: React.FC = () => {
   // 自动断帧
   const last_receive_time_ref = useRef<number>(0);
   const auto_frame_ref = useRef(true);
-  const auto_frame_time_ref = useRef(10);
-  const [auto_frame_time, setAutoFrameTime] = useState<number>(10);
-  // 显示发送字符串
-  const show_send_message_ref = useRef(false);
-  // 十六进制显示
-  const hex_show_ref = useRef(false);
-  // 十六进制发送
-  const [hex_send, setHexSend] = useState<boolean>(false);
   // 输入文本框
   const [sendText_data, setSendTextData] = useState<string>('');
   const sendText_data_ref = useRef(sendText_data);
@@ -91,7 +111,6 @@ const SerialDebugger: React.FC = () => {
   // 定时发送
   const [timerRunning, setTimerRunning] = useState(false); // 控制定时器状态
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
-  const [timerInterval, setTimerInterval] = useState<number>(100000); // 定时器间隔，单位毫秒
 
   // 串口配置
   const [serial_config, setSerialConfig] = useState<SerialConfig>({
@@ -148,7 +167,7 @@ const SerialDebugger: React.FC = () => {
     if (timerRunning) {
       timerRef.current = setInterval(async () => {
         await sendMsgRef.current();
-      }, timerInterval);
+      }, check_memory.timer_interval);
     }
 
     return () => {
@@ -157,7 +176,7 @@ const SerialDebugger: React.FC = () => {
         timerRef.current = null;
       }
     };
-  }, [timerRunning, timerInterval]);
+  }, [timerRunning, check_memory.timer_interval]);
   // 处理滚动逻辑
   useEffect(() => {
     if (need_scroll_ref.current) {
@@ -213,6 +232,26 @@ const SerialDebugger: React.FC = () => {
           setSerialConfig(newConfig);
         }
       }
+
+      let savedCheck: CheckMemory | undefined = undefined;
+      const savedCheckString = localStorage.getItem('checkMemory');
+      if (savedCheckString) {
+        try {
+          const defaultCheck: CheckMemory = {
+            hex_show: false,
+            hex_send: false,
+            auto_frame: false,
+            show_send: false,
+            auto_frame_time: 100,
+            auto_send_time: 1000,
+            send_color: '#31a9ff'
+          };
+          const parsed = JSON.parse(savedCheckString) as CheckMemory;
+          savedCheck = { ...defaultCheck, ...parsed };
+          setCheckMemory(savedCheck);
+        } catch (e) {
+        }
+      }
     });
 
     // 加载脚本配置
@@ -221,20 +260,6 @@ const SerialDebugger: React.FC = () => {
       let scriptsConfig = scripts as ScriptConfig || { recv_script: [], send_script: [] };
       setScriptConfig(scriptsConfig);
     });
-    // 加载local配置
-    const localAutoSendTime = localStorage.getItem('autoSendTime');
-    if (localAutoSendTime) {
-      setTimerInterval(parseInt(localAutoSendTime));
-    }
-    const localSendColor = localStorage.getItem('sendColor');
-    if (localSendColor) {
-      setColor(localSendColor);
-    }
-    const localAutoFrameTime = localStorage.getItem('autoFrameTime');
-    if (localAutoFrameTime) {
-      setAutoFrameTime(parseInt(localAutoFrameTime));
-      auto_frame_time_ref.current = parseInt(localAutoFrameTime);
-    }
 
     let unlistenDataUpdated: (() => void) | undefined;
     let unlistenSerialFailed: (() => void) | undefined;
@@ -244,7 +269,7 @@ const SerialDebugger: React.FC = () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
         if (!isMounted[0]) return;
         const data = event.payload as Array<number>;
-        const frame_break = auto_frame_ref.current && Date.now() - last_receive_time_ref.current > auto_frame_time_ref.current;
+        const frame_break = auto_frame_ref.current && Date.now() - last_receive_time_ref.current > (check_memory_ref.current.auto_frame_time || 1000);
         const uint8Data = new Uint8Array(data);
         const showSection = document.getElementById('show-section');
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
@@ -455,7 +480,7 @@ const SerialDebugger: React.FC = () => {
   };
 
   const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (hex_send) {
+    if (check_memory.hex_send) {
       const originalValue = e.target.value;
       const cursorPosition = e.target.selectionStart;
 
