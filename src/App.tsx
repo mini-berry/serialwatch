@@ -65,7 +65,7 @@ const SerialDebugger: React.FC = () => {
     return localStorage.getItem('darkMode') === 'true';
   };
 
-  const [check_memory, setCheckMemory] = useState<CheckMemory>(
+  const [checkMemory, setCheckMemory] = useState<CheckMemory>(
     {
       hex_show: false,
       hex_send: false,
@@ -74,15 +74,18 @@ const SerialDebugger: React.FC = () => {
       auto_frame_time: 100,
       send_color: '#31a9ff',
       auto_send_time: 1000,
-      timer_interval: 100000,
+      timer_interval: 3000,
     }
   )
 
-  const check_memory_ref = useRef(check_memory);
+  const checkMemoryRef = useRef(checkMemory);
   useEffect(() => {
-    check_memory_ref.current = check_memory;
-    localStorage.setItem('checkMemory', JSON.stringify(check_memory));
-  }, [check_memory]);
+    checkMemoryRef.current = checkMemory;
+  }, [checkMemory]);
+
+  const saveMemoryToLocal = (memory: CheckMemory) => {
+    localStorage.setItem('checkMemory', JSON.stringify(memory));
+  }
 
   // local配置监控启用
   const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
@@ -95,7 +98,6 @@ const SerialDebugger: React.FC = () => {
   const need_scroll_ref = useRef(false);
   // 自动断帧
   const last_receive_time_ref = useRef<number>(0);
-  const auto_frame_ref = useRef(true);
   // 输入文本框
   const [sendText_data, setSendTextData] = useState<string>('');
   const sendText_data_ref = useRef(sendText_data);
@@ -109,7 +111,7 @@ const SerialDebugger: React.FC = () => {
   const [serial_list, setSerialList] = useState<Array<SerialDevice>>([]);
 
   // 定时发送
-  const [timerRunning, setTimerRunning] = useState(false); // 控制定时器状态
+  const [timerRunning, setTimerRunning] = useState(false);
   const timerRef = useRef<ReturnType<typeof setInterval> | null>(null);
 
   // 串口配置
@@ -135,7 +137,7 @@ const SerialDebugger: React.FC = () => {
   const recv_script_ref = useRef<string>('');
   const send_script_ref = useRef<string>('');
   const [script_config, setScriptConfig] = useState<ScriptConfig>({ recv_script: [], send_script: [] });
-  // 打开设置界面
+
   const openSettings = async () => {
     await invoke('open_and_activate_about');
   }
@@ -162,12 +164,12 @@ const SerialDebugger: React.FC = () => {
     invoke('send_msg', { msg: data });
   }
 
-  // 处理定时发送逻辑
+  // 定时器修改时处理定时发送逻辑
   useEffect(() => {
     if (timerRunning) {
       timerRef.current = setInterval(async () => {
         await sendMsgRef.current();
-      }, check_memory.timer_interval);
+      }, checkMemoryRef.current.timer_interval || 1000);
     }
 
     return () => {
@@ -176,8 +178,9 @@ const SerialDebugger: React.FC = () => {
         timerRef.current = null;
       }
     };
-  }, [timerRunning, check_memory.timer_interval]);
-  // 处理滚动逻辑
+  }, [timerRunning, checkMemory.timer_interval]);
+
+  // 收到数据时处理滚动逻辑
   useEffect(() => {
     if (need_scroll_ref.current) {
       const showSection = document.getElementById('show-section');
@@ -191,6 +194,7 @@ const SerialDebugger: React.FC = () => {
       need_scroll_ref.current = false;
     }
   }, [receive_text]);
+
   const [messageApi, messageHolder] = message.useMessage();
   // 初始化
   useEffect(() => {
@@ -244,7 +248,8 @@ const SerialDebugger: React.FC = () => {
             show_send: false,
             auto_frame_time: 100,
             auto_send_time: 1000,
-            send_color: '#31a9ff'
+            send_color: '#31a9ff',
+            timer_interval: 3000,
           };
           const parsed = JSON.parse(savedCheckString) as CheckMemory;
           savedCheck = { ...defaultCheck, ...parsed };
@@ -269,7 +274,7 @@ const SerialDebugger: React.FC = () => {
       unlistenDataUpdated = await listen('data-updated', (event) => {
         if (!isMounted[0]) return;
         const data = event.payload as Array<number>;
-        const frame_break = auto_frame_ref.current && Date.now() - last_receive_time_ref.current > (check_memory_ref.current.auto_frame_time || 1000);
+        const frame_break = checkMemoryRef.current.auto_frame && Date.now() - last_receive_time_ref.current > (checkMemoryRef.current.auto_frame_time || 1000);
         const uint8Data = new Uint8Array(data);
         const showSection = document.getElementById('show-section');
         const nowOnBottom = showSection ? (showSection.scrollTop + showSection.clientHeight + 25 >= showSection.scrollHeight) : false;
@@ -302,15 +307,15 @@ const SerialDebugger: React.FC = () => {
           return;
         }
         // 关闭十六进制显示
-        if (!hex_show_ref.current) {
+        if (!checkMemoryRef.current.hex_show) {
           setReceiveText((prev) => {
             // 上一行是接收数据，且未开启自动断帧或未超时，则合并到上一行
-            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+            if (!(checkMemoryRef.current.auto_frame && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
               return appendReceiveLine(prev, uint8Data, { mergePrevious: true });
             }
 
             return appendReceiveLine(prev, uint8Data, {
-              prefixSendTag: show_send_message_ref.current,
+              prefixSendTag: checkMemoryRef.current.show_send,
             });
           });
         }
@@ -320,15 +325,15 @@ const SerialDebugger: React.FC = () => {
             .map((byte) => byte.toString(16).padStart(2, '0'))
             .join(' ').toUpperCase();
           setReceiveText((prev) => {
-            if (!(auto_frame_ref.current && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
+            if (!(checkMemoryRef.current.auto_frame && frame_break) && prev.length > 0 && prev[prev.length - 1].type === 'receive') {
               return appendHexReceiveLine(prev, hexString, uint8Data, {
                 mergePrevious: true,
               });
             }
-            return appendHexReceiveLine(prev, hexString, uint8Data, { prefixSendTag: show_send_message_ref.current });
+            return appendHexReceiveLine(prev, hexString, uint8Data, { prefixSendTag: checkMemoryRef.current.show_send });
           });
         };
-        if (auto_frame_ref.current) {
+        if (checkMemoryRef.current.auto_frame) {
           last_receive_time_ref.current = Date.now();
         }
       });
@@ -365,9 +370,8 @@ const SerialDebugger: React.FC = () => {
   }, []);
 
   const formatter: InputNumberProps<number>['formatter'] = (value) => {
-    if (value === undefined || value === null) return '0.0';
-    const formattedValue = (value / 10).toFixed(1);
-    return `${formattedValue}`;
+    const num = value ?? 0;
+    return parseFloat((num / 10).toFixed(1)).toString();
   };
 
   const appendReceiveLine = (
@@ -439,7 +443,7 @@ const SerialDebugger: React.FC = () => {
 
   const send_message_display = (msg: string) => {
     if (serial_config_ref.current.open_status) {
-      setReceiveText((prev) => [...prev, { content: '< ' + msg, color: color, type: 'send' }]);
+      setReceiveText((prev) => [...prev, { content: '< ' + msg, color: checkMemoryRef.current.send_color, type: 'send' }]);
       need_scroll_ref.current = true;
     }
   };
@@ -480,7 +484,7 @@ const SerialDebugger: React.FC = () => {
   };
 
   const input_change = (e: React.ChangeEvent<HTMLTextAreaElement>) => {
-    if (check_memory.hex_send) {
+    if (checkMemory.hex_send) {
       const originalValue = e.target.value;
       const cursorPosition = e.target.selectionStart;
 
@@ -521,7 +525,7 @@ const SerialDebugger: React.FC = () => {
   };
 
   const hex_send_change = (e: CheckboxChangeEvent) => {
-    setHexSend(e.target.checked);
+    setCheckMemory((prev) => { const newMem = { ...prev, hex_send: e.target.checked }; saveMemoryToLocal(newMem); return newMem; });
     if (!e.target.checked) {
       let hexString = sendText_data.replace(/\s+/g, '');
       if (hexString.length % 2 !== 0) {
@@ -559,7 +563,7 @@ const SerialDebugger: React.FC = () => {
 
     sendingRef.current = true;
     try {
-      if (!hex_send) {
+      if (!checkMemoryRef.current.hex_send) {
         let data = new TextEncoder().encode(sendText_data_ref.current);
         if (send_script_enable_ref.current && send_script_ref.current) {
           const get_send_data = () => new Uint8Array(data);
@@ -568,7 +572,7 @@ const SerialDebugger: React.FC = () => {
           return;
         }
         setSendCount((prev) => prev + data.length);
-        if (show_send_message_ref.current && data.length > 0) {
+        if (checkMemoryRef.current.show_send && data.length > 0) {
           send_message_display(sendText_data_ref.current);
         }
         await invoke('send_msg', { msg: data });
@@ -587,7 +591,7 @@ const SerialDebugger: React.FC = () => {
           new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
           return;
         }
-        if (show_send_message_ref.current) {
+        if (checkMemoryRef.current.show_send && uint8Array.length > 0) {
           if (hexString.length % 2 !== 0) {
             const displayString = (sendText_data_ref.current.slice(0, -1) + '0' + sendText_data_ref.current.slice(-1));
             send_message_display(displayString);
@@ -644,7 +648,7 @@ const SerialDebugger: React.FC = () => {
     if (selectedText.length > 3) {
       let textToCopy = selectedText.trim();
       const regex = /^[0-9A-F]{2}(?: [0-9A-F]{2})*$/;
-      setHexSend(regex.test(textToCopy));
+      setCheckMemory((prev) => { const newMem = { ...prev, hex_send: regex.test(textToCopy) }; saveMemoryToLocal(newMem); return newMem; });
       setSendTextData(textToCopy);
     }
     else
@@ -842,27 +846,27 @@ const SerialDebugger: React.FC = () => {
                 <h3 className="serial-debugger__section-title">接收设置</h3>
               </div>
               <div className="checkbox-row">
-                <Checkbox onChange={(e) => { hex_show_ref.current = e.target.checked }}>
+                <Checkbox checked={checkMemory.hex_show} onChange={(e) => { setCheckMemory((prev) => { const newMem = { ...prev, hex_show: e.target.checked }; saveMemoryToLocal(newMem); return newMem; }); }}>
                   十六进制显示
                 </Checkbox>
               </div>
               <div className="checkbox_withinput-row">
-                <Checkbox defaultChecked onChange={(e) => { auto_frame_ref.current = e.target.checked }}>
+                <Checkbox checked={checkMemory.auto_frame} onChange={(e) => { setCheckMemory((prev) => { const newMem = { ...prev, auto_frame: e.target.checked }; saveMemoryToLocal(newMem); return newMem; }); }}>
                   自动断帧(ms)
                 </Checkbox>
                 <InputNumber<number>
                   min={1}
                   step={100}
                   size="small"
-                  value={auto_frame_time}
+                  value={checkMemory.auto_frame_time}
                   parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number}
                   changeOnWheel
-                  onChange={(value) => { auto_frame_time_ref.current = value || 10; localStorage.setItem('autoFrameTime', (value || 10).toString()); setAutoFrameTime(value || 10) }}
+                  onChange={(value) => { setCheckMemory((prev) => { const newMem = { ...prev, auto_frame_time: value || 10 }; saveMemoryToLocal(newMem); return newMem; }); }}
                 />
               </div>
               <div className="checkbox_withinput-row">
                 <Checkbox onChange={(e) => {
-                  recv_script_enable_ref.current = e.target.checked
+                  setCheckMemory((prev) => { const newMem = { ...prev, recv_script_enable: e.target.checked }; saveMemoryToLocal(newMem); return newMem; });
                 }}>
                   脚本
                 </Checkbox>
@@ -879,31 +883,17 @@ const SerialDebugger: React.FC = () => {
                 <h3 className="serial-debugger__section-title">发送设置</h3>
               </div>
               <div className="checkbox-row">
-                <Checkbox checked={hex_send} onChange={hex_send_change}>
+                <Checkbox checked={checkMemory.hex_send} onChange={hex_send_change}>
                   十六进制发送
                 </Checkbox>
               </div>
-              <div className="checkbox_withinput-row">
-                <Checkbox checked={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
-                  定时发送(s)
-                </Checkbox>
-                <InputNumber<number>
-                  min={1}
-                  size="small"
-                  value={timerInterval / 100}
-                  formatter={formatter}
-                  parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
-                  onChange={(value) => { setTimerInterval((value || 1000) * 100); localStorage.setItem('autoSendTime', ((value || 1000) * 100).toString()) }}
-                  changeOnWheel
-                />
-              </div>
               <div className="checkbox-row">
-                <Checkbox onChange={(e) => { show_send_message_ref.current = e.target.checked }}>
+                <Checkbox checked={checkMemory.show_send} onChange={(e) => { setCheckMemory((prev) => { const newMem = { ...prev, show_send: e.target.checked }; saveMemoryToLocal(newMem); return newMem; }); }}>
                   显示发送字符串
                 </Checkbox>
                 <ColorPicker
-                  value={color}
-                  onChange={(color) => { setColor(color.toHexString()); localStorage.setItem('sendColor', color.toHexString()) }}
+                  value={checkMemory.send_color}
+                  onChange={(color) => { setCheckMemory((prev) => { const newMem = { ...prev, send_color: color.toHexString() }; saveMemoryToLocal(newMem); return newMem; }); }}
                   style={{ margin: '-10px 0 0 0' }}
                   size="small"
                   format="hex"
@@ -948,8 +938,22 @@ const SerialDebugger: React.FC = () => {
                 />
               </div>
               <div className="checkbox_withinput-row">
+                <Checkbox checked={timerRunning} onChange={(e) => setTimerRunning(e.target.checked)}>
+                  定时发送(s)
+                </Checkbox>
+                <InputNumber<number>
+                  min={1}
+                  size="small"
+                  value={(checkMemory.timer_interval || 100000) / 100}
+                  formatter={formatter}
+                  parser={(value) => value?.replace(/\$\s?|(,*)/g, '') as unknown as number * 10}
+                  onChange={(value) => { setCheckMemory((prev) => { const newMem = { ...prev, timer_interval: (value || 1) * 100 }; saveMemoryToLocal(newMem); return newMem; }); }}
+                  changeOnWheel
+                />
+              </div>
+              <div className="checkbox_withinput-row">
                 <Checkbox onChange={(e) => {
-                  send_script_enable_ref.current = e.target.checked
+                  setCheckMemory((prev) => { const newMem = { ...prev, send_script_enable: e.target.checked }; saveMemoryToLocal(newMem); return newMem; });
                 }}>
                   脚本
                 </Checkbox>
