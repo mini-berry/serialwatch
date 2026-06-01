@@ -3,7 +3,7 @@ import { ConfigProvider, theme } from 'antd';
 import { useSyncExternalStore } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown, Radio } from 'antd';
-import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined, EditOutlined } from '@ant-design/icons';
+import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined, EditOutlined, CheckOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
@@ -65,6 +65,7 @@ const SerialDebugger: React.FC = () => {
     return localStorage.getItem('darkMode') === 'true';
   };
 
+  const [customBaud, setCustomBaud] = useState<number | null>(null);
   const [checkMemory, setCheckMemory] = useState<CheckMemory>(
     {
       hex_show: false,
@@ -93,10 +94,11 @@ const SerialDebugger: React.FC = () => {
   // 发送接收计数
   const [receive_count, setReceiveCount] = useState<number>(0);
   const [send_count, setSendCount] = useState<number>(0);
-  // 接收显示HTML
+  // 接收文本
   const [receive_text, setReceiveText] = useState<OutLine[]>([]);
+  // 是否需要自动滚动到底部
   const need_scroll_ref = useRef(false);
-  // 自动断帧
+  // 自动断帧时间记录
   const last_receive_time_ref = useRef<number>(0);
   // 输入文本框
   const [sendText_data, setSendTextData] = useState<string>('');
@@ -724,7 +726,6 @@ const SerialDebugger: React.FC = () => {
   },
   ];
 
-
   return (
     <ConfigProvider
       theme={{
@@ -744,7 +745,7 @@ const SerialDebugger: React.FC = () => {
                     label: `${device.port}-${device.name}`,
                   }))}
                   onChange={(value) => config_change('port', value)}
-                  onOpenChange={scan_serial}
+                  onOpenChange={(e) => { if (e) scan_serial(); }}
                 />
               </div>
 
@@ -774,6 +775,29 @@ const SerialDebugger: React.FC = () => {
                     { value: 1500000, label: '1,500,000' },
                     { value: 2000000, label: '2,000,000' },
                   ]}
+                  popupRender={(menu) => (
+                    <>
+                      {menu}
+                      <Divider style={{ margin: '3px 0 4px 0' }} />
+                      <div style={{ display: 'flex', gap: 4 }}>
+                        <InputNumber placeholder="自定义"
+                          variant="borderless"
+                          style={{ flex: 1, height: '28px' }}
+                          max={2000000}
+                          min={300}
+                          controls={false}
+                          value={customBaud}
+                          onChange={(value) => setCustomBaud(value)}
+                          onPressEnter={() => { if (customBaud) config_change('baud', customBaud); }} />
+                        <Button
+                          type="primary"
+                          icon={<CheckOutlined />}
+                          style={{ height: '28px', width: '28px' }}
+                          onClick={() => { if (customBaud) config_change('baud', customBaud); }}
+                        />
+                      </div>
+                    </>
+                  )}
                 />
               </div>
 
@@ -1036,7 +1060,7 @@ const SerialDebugger: React.FC = () => {
           </Splitter.Panel >
         </Splitter >
       </div >
-    </ConfigProvider>
+    </ConfigProvider >
   );
 };
 
