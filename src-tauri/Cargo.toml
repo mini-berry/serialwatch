@@ -29,3 +29,4 @@ toml = "1.1.2"
 openssl-sys = { version = "0.9", features = ["vendored"] }
 tauri-plugin-window-state = "2"
 tauri-plugin-clipboard-manager = "2"
+reqwest = { version = "0.13.4", features = ["json"] }

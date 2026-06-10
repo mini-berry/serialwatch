@@ -8,8 +8,8 @@ use tokio::sync::mpsc;
 use tokio::sync::mpsc::Sender;
 use tokio_serial::ClearBuffer;
 use tokio_serial::{SerialPort, SerialPortBuilderExt};
-
 mod config;
+mod update;
 #[allow(dead_code)]
 #[derive(Debug, Serialize, Clone)]
 enum MsgToFrontend {
@@ -70,7 +70,8 @@ pub fn run() {
             open_and_activate_editor,
             close_editor,
             load_script_config,
-            save_script_config
+            save_script_config,
+            update::process_update
         ])
         .run(tauri::generate_context!())
         .expect("error while running tauri application");

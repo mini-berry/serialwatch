@@ -90,7 +90,7 @@ const SerialDebugger: React.FC = () => {
 
   // local配置监控启用
   const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
-
+  const [hasUpdate, setHasUpdate] = useState(false);
   // 发送接收计数
   const [receive_count, setReceiveCount] = useState<number>(0);
   const [send_count, setSendCount] = useState<number>(0);
@@ -694,6 +694,7 @@ const SerialDebugger: React.FC = () => {
   const preventContextMenu = (e: React.MouseEvent) => {
     e.preventDefault();
   };
+
   const logMenu: MenuProps['items'] = [{
     key: 'copy',
     label: '复制',
@@ -991,6 +992,11 @@ const SerialDebugger: React.FC = () => {
               <div style={{ height: "27px" }}></div>
             </div>
             <div className="bottom-bar" onContextMenu={preventContextMenu}>
+              {hasUpdate && (
+                <div className='inner-icon'>
+                  <SettingOutlined className='icon setting-icon' />
+                </div>
+              )}
               <div className='inner-icon' onClick={clean_output}>
                 <ClearOutlined className='icon clear-icon' />
               </div>
