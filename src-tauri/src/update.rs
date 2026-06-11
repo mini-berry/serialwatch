@@ -1,4 +1,4 @@
-const GITHUB_API_URL: &str = "https://swrweb.exsg.workers.dev/";
+const GITHUB_API_URL: &str = "https://swrweb.netlify.app/";
 use reqwest::Client;
 use serde::{Deserialize, Serialize};
 
@@ -9,6 +9,7 @@ struct UpdateInfo {
     rpm: String,
     exe: String,
     setup: String,
+    description: String,
 }
 
 async fn check_update() -> Option<UpdateInfo> {
@@ -43,11 +44,16 @@ async fn check_update() -> Option<UpdateInfo> {
 }
 
 #[tauri::command]
-pub async fn process_update() -> bool {
+pub async fn process_update(app_handle: tauri::AppHandle) -> bool {
+    let current_version = app_handle.package_info().version.clone();
+    let current_version = current_version.to_string();
     match check_update().await {
         Some(update_info) => {
-            if update_info.version != env!("CARGO_PKG_VERSION") {
-                println!("New version available: {}", update_info.version);
+            if update_info.version != current_version {
+                println!(
+                    "Current Ver: {}, New version: {}",
+                    current_version, update_info.version
+                );
                 // 这里可以添加下载和安装更新的逻辑
                 true
             } else {

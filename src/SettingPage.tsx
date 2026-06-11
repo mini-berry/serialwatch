@@ -74,7 +74,7 @@ const SettingPage: React.FC = () => {
             <p>开源地址:</p>
             <a onClick={(e) => { e.preventDefault(); handleOpen('https://github.com/mini-berry/serialwatch'); }} href="https://github.com/mini-berry/serialwatch" target="_blank" rel="noopener noreferrer">https://github.com/mini-berry/serialwatch</a>
             <p>项目主页:</p>
-            <a onClick={(e) => { e.preventDefault(); handleOpen('https://swrweb.exsg.workers.dev'); }} href="https://swrweb.exsg.workers.dev" target="_blank" rel="noopener noreferrer">https://swrweb.exsg.workers.dev</a>
+            <a onClick={(e) => { e.preventDefault(); handleOpen('https://swrweb.netlify.app/'); }} href="https://swrweb.netlify.app/" target="_blank" rel="noopener noreferrer">https://swrweb.netlify.app/</a>
         </div>)
     };
     const handleMenuClick = (e: any) => {

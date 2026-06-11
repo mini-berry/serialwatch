@@ -1,9 +1,10 @@
 import React, { useState, useEffect, useRef } from 'react';
 import { ConfigProvider, theme } from 'antd';
+import { openUrl } from '@tauri-apps/plugin-opener';
 import { useSyncExternalStore } from 'react';
 import './App.css';
 import { InputNumber, ColorPicker, Input, Button, Select, Splitter, Checkbox, Divider, Dropdown, Radio } from 'antd';
-import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined, EditOutlined, CheckOutlined } from '@ant-design/icons';
+import { ClearOutlined, SettingOutlined, UpOutlined, DownOutlined, CopyOutlined, EditOutlined, CheckOutlined, UploadOutlined } from '@ant-design/icons';
 import type { InputNumberProps } from 'antd';
 import type { TextAreaRef } from 'antd/es/input/TextArea';
 import type { CheckboxChangeEvent } from 'antd/es/checkbox';
@@ -201,6 +202,10 @@ const SerialDebugger: React.FC = () => {
   // 初始化
   useEffect(() => {
     const isMountedRef = { current: true };
+
+    invoke('process_update').then((update) => {
+      setHasUpdate(update as boolean);
+    });
 
     // 扫描串口并加载配置
     invoke('scan_serial').then((devices) => {
@@ -993,8 +998,8 @@ const SerialDebugger: React.FC = () => {
             </div>
             <div className="bottom-bar" onContextMenu={preventContextMenu}>
               {hasUpdate && (
-                <div className='inner-icon'>
-                  <SettingOutlined className='icon setting-icon' />
+                <div className='update-icon' onClick={async () => { await openUrl('https://swrweb.netlify.app/') }}>
+                  <UploadOutlined className='icon setting-icon' />
                 </div>
               )}
               <div className='inner-icon' onClick={clean_output}>
