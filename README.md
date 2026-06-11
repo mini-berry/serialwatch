@@ -2,6 +2,10 @@
 
 一个基于 Tauri + Rust + React 的串口监视工具。
 
+## 项目官网
+
+https://swrweb.netlify.app/
+
 ## 使用说明
 
 需要安装webview2
