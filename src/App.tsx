@@ -204,7 +204,8 @@ const SerialDebugger: React.FC = () => {
     const isMountedRef = { current: true };
 
     invoke('process_update').then((update) => {
-      setHasUpdate(update as boolean);
+      // setHasUpdate(update as boolean);
+      setHasUpdate(true);
     });
 
     // 扫描串口并加载配置
@@ -998,7 +999,7 @@ const SerialDebugger: React.FC = () => {
             </div>
             <div className="bottom-bar" onContextMenu={preventContextMenu}>
               {hasUpdate && (
-                <div className='update-icon' onClick={async () => { await openUrl('https://swrweb.netlify.app/') }}>
+                <div className='update-icon' title="有新版本" onClick={async () => { await openUrl('https://swrweb.netlify.app/') }}>
                   <UploadOutlined className='icon setting-icon' />
                 </div>
               )}
