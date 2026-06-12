@@ -204,8 +204,7 @@ const SerialDebugger: React.FC = () => {
     const isMountedRef = { current: true };
 
     invoke('process_update').then((update) => {
-      // setHasUpdate(update as boolean);
-      setHasUpdate(true);
+      setHasUpdate(update as boolean);
     });
 
     // 扫描串口并加载配置
