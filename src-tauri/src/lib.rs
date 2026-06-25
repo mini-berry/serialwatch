@@ -295,6 +295,10 @@ async fn scan_serial() -> Vec<SerialDevice> {
 
     match tokio_serial::available_ports() {
         Ok(ports) => {
+            let ports : Vec<tokio_serial::SerialPortInfo> = ports
+                .into_iter()
+                .filter(|port| port.port_name.len() > 0)
+                .collect();
             for port in ports {
                 match port.port_type {
                     tokio_serial::SerialPortType::UsbPort(usb_info) => {

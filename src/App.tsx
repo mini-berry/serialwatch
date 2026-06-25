@@ -159,6 +159,11 @@ const SerialDebugger: React.FC = () => {
     need_scroll_ref.current = nowOnBottom;
   }
 
+  async function sleep(ms: number) {
+    let time = Math.max(ms, 10000)
+    return new Promise(resolve => setTimeout(resolve, time));
+  }
+
   function send_data(data: Uint8Array) {
     if (!serial_config_ref.current.open_status || data.length === 0) {
       return;
@@ -309,8 +314,8 @@ const SerialDebugger: React.FC = () => {
         if (recv_script_enable_ref.current && recv_script_ref.current) {
           const get_data = () => new Uint8Array(uint8Data);
 
-          const scriptString = 'try{' + recv_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
-          new Function('print_logline', 'get_data', 'console', 'send_data', scriptString)(print_logline, get_data, console, send_data);
+          const scriptString = 'return (async () => {try{' + recv_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}})()';
+          new Function('print_logline', 'get_data', 'console', 'send_data', 'sleep', scriptString)(print_logline, get_data, console, send_data, sleep);
           return;
         }
         // 关闭十六进制显示
@@ -574,9 +579,9 @@ const SerialDebugger: React.FC = () => {
         console.log(send_script_enable_ref.current, send_script_ref.current);
         if (send_script_enable_ref.current && send_script_ref.current) {
           const get_send_data = () => new Uint8Array(data);
-          const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
+          const scriptString = 'return (async () => {try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}})()';
           console.log('执行发送脚本', scriptString);
-          new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+          new Function('print_logline', 'get_send_data', 'console', 'send_data', 'sleep', scriptString)(print_logline, get_send_data, console, send_data, sleep);
           return;
         }
         setSendCount((prev) => prev + data.length);
@@ -595,8 +600,8 @@ const SerialDebugger: React.FC = () => {
         const uint8Array = new Uint8Array(bytes);
         if (send_script_enable_ref.current && send_script_ref.current) {
           const get_send_data = () => new Uint8Array(uint8Array);
-          const scriptString = 'try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}';
-          new Function('print_logline', 'get_send_data', 'console', 'send_data', scriptString)(print_logline, get_send_data, console, send_data);
+          const scriptString = 'return (async () => {try{' + send_script_ref.current + '}catch(e){console.error("脚本执行错误", e)}})()';
+          new Function('print_logline', 'get_send_data', 'console', 'send_data', 'sleep', scriptString)(print_logline, get_send_data, console, send_data, sleep);
           return;
         }
         if (checkMemoryRef.current.show_send && uint8Array.length > 0) {
