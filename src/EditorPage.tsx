@@ -4,7 +4,7 @@ import { vscodeDark, vscodeLight } from '@uiw/codemirror-theme-vscode';
 import { javascript } from "@codemirror/lang-javascript";
 import { EditorView } from "@codemirror/view";
 import React from "react";
-import { UndoOutlined, RedoOutlined, UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
+import { QuestionCircleOutlined, UndoOutlined, RedoOutlined, UpOutlined, DownOutlined, DeleteOutlined, EditOutlined, PlusSquareOutlined, SaveOutlined, ScissorOutlined, SnippetsOutlined, CopyOutlined, FormatPainterOutlined } from "@ant-design/icons";
 import { Layout, ConfigProvider, theme, Menu, Dropdown, Button, Modal, Input, Radio } from "antd";
 import { useSyncExternalStore } from 'react';
 import type { MenuProps } from 'antd';
@@ -16,6 +16,7 @@ import parserEstree from 'prettier/plugins/estree';
 import { readText, writeText } from '@tauri-apps/plugin-clipboard-manager';
 import { undo, redo, history, historyField } from "@codemirror/commands";
 import { EditorState, keymap } from "@uiw/react-codemirror";
+import { Popconfirm } from 'antd';
 
 interface ScriptConfig {
     recv_script: [string, string][];
@@ -405,6 +406,31 @@ const EditorPage: React.FC = () => {
     // local配置监控启用
     const darkMode = useSyncExternalStore(subscribe, getSnapshot, getSnapshot);
 
+    const helpDescription = (
+        <div style={{ maxWidth: '280px', lineHeight: '1.8' }}>
+            <div style={{ marginBottom: '8px' }}>
+                <strong>通用函数</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: '20px' }}>
+                    <li>延迟(最大10s): await sleep(1000) </li>
+                    <li>打印: print_logline(str, [color])</li>
+                    <li>发送: send(data)</li>
+                </ul>
+            </div>
+            <div style={{ marginBottom: '8px' }}>
+                <strong>接收函数</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: '20px' }}>
+                    <li>接收数据: get_data()</li>
+                </ul>
+            </div>
+            <div>
+                <strong>发送函数</strong>
+                <ul style={{ margin: '4px 0 0', paddingLeft: '20px' }}>
+                    <li>获取文本框内容: get_send_data()</li>
+                </ul>
+            </div>
+        </div>
+    );
+
     return (
         <ConfigProvider
             theme={{
@@ -476,6 +502,16 @@ const EditorPage: React.FC = () => {
                         <Button className="all-button" onClick={formatCode} title="格式化(Alt+Shift+F)" disabled={!hasOpened}>
                             <FormatPainterOutlined />
                         </Button>
+                        <Popconfirm
+                            placement="bottomRight"
+                            title="函数帮助"
+                            description={helpDescription}
+                            okText="知道了"
+                            cancelText={null} // 帮助提示通常不需要取消按钮，可直接隐藏
+                            showCancel={false} // 使用 showCancel 属性彻底隐藏取消按钮
+                        >
+                            <Button className="help-button" type="text" icon={<QuestionCircleOutlined />} />
+                        </Popconfirm>
                     </Layout.Header>
                     <Layout>
                         <Layout.Sider width="180">

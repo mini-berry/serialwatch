@@ -51,6 +51,14 @@ body {
     transition: all 0.5s;
 }
 
+.help-button {
+    height: 30px;
+    width: 30px;
+    margin-right: 10px;
+    margin-left: auto;
+    transition: all 0.5s;
+}
+
 /* 水晶风的“+”按钮 */
 .new-button {
     width: 180px;

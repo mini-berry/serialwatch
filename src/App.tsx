@@ -160,7 +160,7 @@ const SerialDebugger: React.FC = () => {
   }
 
   async function sleep(ms: number) {
-    let time = Math.max(ms, 10000)
+    let time = Math.min(ms, 10000)
     return new Promise(resolve => setTimeout(resolve, time));
   }
 
