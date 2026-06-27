@@ -101,13 +101,12 @@ async fn serial_thread(
                         drop(port);
                     }
                     // 创建新的builder
-                    let serial_builder = Some(
+                    let serial_builder =
                         tokio_serial::new(new_config.port.clone(), new_config.baud)
-                            .change_config(&new_config),
-                    );
+                            .change_config(&new_config);
 
                     tokio::time::sleep(std::time::Duration::from_millis(100)).await;
-                    match serial_builder.unwrap().open_native_async() {
+                    match serial_builder.open_native_async() {
                         Ok(port) => {
                             serial_port = Some(port);
                             if new_config.dtr {
@@ -295,9 +294,9 @@ async fn scan_serial() -> Vec<SerialDevice> {
 
     match tokio_serial::available_ports() {
         Ok(ports) => {
-            let ports : Vec<tokio_serial::SerialPortInfo> = ports
+            let ports: Vec<tokio_serial::SerialPortInfo> = ports
                 .into_iter()
-                .filter(|port| port.port_name.len() > 0)
+                .filter(|port| !port.port_name.is_empty())
                 .collect();
             for port in ports {
                 match port.port_type {
@@ -386,7 +385,7 @@ impl Config for tokio_serial::SerialPortBuilder {
     fn change_config(self, config: &config::SerialConfig) -> Self {
         self.path(config.port.clone())
             .baud_rate(config.baud)
-            .data_bits(tokio_serial::DataBits::from(match config.data_bits {
+            .data_bits(match config.data_bits {
                 5 => tokio_serial::DataBits::Five,
                 6 => tokio_serial::DataBits::Six,
                 7 => tokio_serial::DataBits::Seven,
@@ -399,8 +398,8 @@ impl Config for tokio_serial::SerialPortBuilder {
                     );
                     tokio_serial::DataBits::Eight
                 }
-            }))
-            .stop_bits(tokio_serial::StopBits::from(match config.stop_bits {
+            })
+            .stop_bits(match config.stop_bits {
                 1 => tokio_serial::StopBits::One,
                 2 => tokio_serial::StopBits::Two,
                 _ => {
@@ -411,7 +410,7 @@ impl Config for tokio_serial::SerialPortBuilder {
                     );
                     tokio_serial::StopBits::One
                 }
-            }))
+            })
             .parity(match config.parity {
                 config::CheckBit::Odd => tokio_serial::Parity::Odd,
                 config::CheckBit::Even => tokio_serial::Parity::Even,
