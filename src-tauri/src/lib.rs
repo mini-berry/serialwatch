@@ -163,40 +163,37 @@ async fn serial_thread(
             }
         }
 
-        match serial_port.as_mut() {
-            Some(port) => {
-                let mut storage = vec![0u8; 1024];
-                let mut buf = tokio::io::ReadBuf::new(&mut storage);
-                tokio::select! {
-                    serial_result = port.read_buf(&mut buf) => {
-                        match serial_result {
-                            Ok(n) if n > 0 => {
-                                let received_data = &storage [..n];
-                                data_buffer.extend_from_slice(received_data);
-                                last_receive_time = std::time::Instant::now();
-                                data_interrupt = false;
-                            }
-                            Err(e) => {
-                                #[cfg(debug_assertions)]
-                                eprintln!("Error reading from serial port: {}", e);
-                                if let Some(port) = serial_port.take() {
-                                    let _ = port.clear(ClearBuffer::Output);
-                                    let _ = port.clear(ClearBuffer::Input);
-                                    drop(port);
-                                }
-                                serial_port = None;
-                                app_handle.emit("serial-failed", format!("{e}")).unwrap_or_else(|_err| {
-                                    #[cfg(debug_assertions)]
-                                    eprintln!("Failed to send error to main thread: {_err}");
-                                });
-                            }
-                            _ => {data_interrupt = true;}
+        if let Some(port) = serial_port.as_mut() {
+            let mut storage = vec![0u8; 1024];
+            let mut buf = tokio::io::ReadBuf::new(&mut storage);
+            tokio::select! {
+                serial_result = port.read_buf(&mut buf) => {
+                    match serial_result {
+                        Ok(n) if n > 0 => {
+                            let received_data = &storage [..n];
+                            data_buffer.extend_from_slice(received_data);
+                            last_receive_time = std::time::Instant::now();
+                            data_interrupt = false;
                         }
+                        Err(e) => {
+                            #[cfg(debug_assertions)]
+                            eprintln!("Error reading from serial port: {}", e);
+                            if let Some(port) = serial_port.take() {
+                                let _ = port.clear(ClearBuffer::Output);
+                                let _ = port.clear(ClearBuffer::Input);
+                                drop(port);
+                            }
+                            serial_port = None;
+                            app_handle.emit("serial-failed", format!("{e}")).unwrap_or_else(|_err| {
+                                #[cfg(debug_assertions)]
+                                eprintln!("Failed to send error to main thread: {_err}");
+                            });
+                        }
+                        _ => {data_interrupt = true;}
                     }
-                    _  =  tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
                 }
+                _  =  tokio::time::sleep(std::time::Duration::from_millis(10)) => {}
             }
-            None => {}
         }
 
         let data = msg_receiver.try_recv();
